@@ -1,0 +1,30 @@
+# --- Security ---
+.env
+.env.*
+
+# --- Go Build Binaries ---
+# Windows
+*.exe
+*.dll
+# Mac/Linux
+main
+logpulse
+
+# --- Data & Logs ---
+mysql_data/
+redis_data/
+*.log
+
+# --- IDE/Editor Settings ---
+.vscode/
+.idea/
+*.swp
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
+
+# --- Test & Note ---
+DEV_LOG.md
+SyntaxDebt.md
+api.http
