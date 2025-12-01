@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Yupoer/logpulse/internal/domain"
@@ -17,33 +18,44 @@ func NewLogHandler(service *service.LogService) *LogHandler {
 	return &LogHandler{service: service}
 }
 
-// CreateLog handles POST /logs requests.
 func (h *LogHandler) CreateLog(c *gin.Context) {
 	var entry domain.LogEntry
-
-	// 1. Parse JSON
 	if err := c.ShouldBindJSON(&entry); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format"})
 		return
 	}
 
-	// 2. Set Default Timestamp
 	if entry.Timestamp.IsZero() {
 		entry.Timestamp = time.Now()
 	}
 
-	// 3. Call Service Layer
-	// We pass c.Request.Context() to propagate cancellation/timeout signals.
 	totalCount, err := h.service.CreateLog(c.Request.Context(), &entry)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process log"})
 		return
 	}
 
-	// 4. Return Response
 	c.JSON(http.StatusCreated, gin.H{
 		"message":      "Log saved",
-		"id":           entry.ID,
+		"id":           entry.ID, // Note: This will be 0 because it's async!
 		"total_logged": totalCount,
 	})
+}
+
+// [NEW] GetLog
+func (h *LogHandler) GetLog(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	entry, err := h.service.GetLog(c.Request.Context(), uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Log not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, entry)
 }

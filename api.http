@@ -1,0 +1,21 @@
+### Create Log
+### 1. Create a Log (Trigger Async Flow)
+#  201 Created. (ID = 0)
+POST http://localhost:8080/logs
+Content-Type: application/json
+
+{
+    "service_name": "cache-demo",
+    "level": "INFO",
+    "message": "Verify Cache Mechanism"
+}
+
+### 2. Get Log by ID 
+# if is db first data GET ID = 1
+# "[Cache] Miss, querying DB..."
+GET http://localhost:8080/logs/1
+
+### 3. Get Log by ID 
+# request again
+# "[Cache] Hit" 
+GET http://localhost:8080/logs/1

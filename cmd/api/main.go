@@ -32,7 +32,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("MySQL Connection Failed: %v", err)
 	}
-	// Tech Debt: AutoMigrate should be avoided in production
+	// Warning: AutoMigrate should be avoided in production
 	db.AutoMigrate(&domain.LogEntry{})
 
 	// Redis
@@ -41,18 +41,39 @@ func main() {
 		log.Fatalf("Redis Connection Failed: %v", err)
 	}
 
-	// 3. Dependency Injection (Wiring)
-	// Repo -> Service -> Handler
-	logRepo := repository.NewLogRepository(db)
-	statsRepo := repository.NewStatsRepository(rdb)
+	// Kafka Producer
+	producer, err := repository.NewKafkaProducer(cfg.KafkaBrokers, cfg.KafkaTopic)
+	if err != nil {
+		log.Fatalf("Failed to initialize Kafka Producer: %v", err)
+	}
+	defer producer.Close()
 
-	logService := service.NewLogService(logRepo, statsRepo)
+	// 3. Dependency Injection (Wiring)
+	cacheRepo := repository.NewLogCacheRepository(rdb) // Renamed constructor
+	logRepo := repository.NewLogRepository(db)         // We need this for Service now
+
+	// Updated Service Injection
+	logService := service.NewLogService(producer, logRepo, cacheRepo)
 	logHandler := handler.NewLogHandler(logService)
+
+	// --- [NEW] Start Kafka Consumer Worker (Background Job) ---
+	// We run this in a separate goroutine so it doesn't block the HTTP server.
+	consumerWorker := repository.NewKafkaConsumer(logRepo)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // Ensure cleanup on exit
+
+	go func() {
+		log.Println("Starting Kafka Consumer Worker...")
+		// "logpulse-group" is the Consumer Group ID.
+		// If you run multiple instances of this app, they will share the load.
+		consumerWorker.StartConsumerGroup(ctx, cfg.KafkaBrokers, cfg.KafkaTopic, "logpulse-group")
+	}()
 
 	// 4. Router Setup
 	r := gin.Default()
 	r.GET("/ping", func(c *gin.Context) { c.JSON(200, gin.H{"message": "pong"}) })
-	r.POST("/logs", logHandler.CreateLog) // Register the new handler
+	r.POST("/logs", logHandler.CreateLog)
+	r.GET("/logs/:id", logHandler.GetLog) // [NEW] Register Route
 
 	// 5. Server Setup with Graceful Shutdown
 	srv := &http.Server{
@@ -60,7 +81,6 @@ func main() {
 		Handler: r,
 	}
 
-	// Run server in a separate goroutine so it doesn't block the main thread
 	go func() {
 		log.Printf("Starting server on port %s", cfg.ServerPort)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -69,21 +89,15 @@ func main() {
 	}()
 
 	// 6. Graceful Shutdown Logic
-	// Wait for interrupt signal to gracefully shutdown the server with a timeout of 5 seconds.
 	quit := make(chan os.Signal, 1)
-	// kill (no param) default send syscall.SIGTERM
-	// kill -2 is syscall.SIGINT
-	// kill -9 is syscall.SIGKILL but can't be caught, so don't need to add it
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit // Block here until signal is received
+	<-quit
 	log.Println("Shutting down server...")
 
-	// The context is used to inform the server it has 5 seconds to finish
-	// the request it is currently handling
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Fatal("Server forced to shutdown:", err)
 	}
 

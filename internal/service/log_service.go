@@ -2,36 +2,60 @@ package service
 
 import (
 	"context"
+	"log"
 
 	"github.com/Yupoer/logpulse/internal/domain"
 )
 
-// LogService handles the business logic for logs.
 type LogService struct {
-	logRepo   domain.LogRepository
-	statsRepo domain.StatsRepository
+	producer  domain.LogProducer
+	logRepo   domain.LogRepository      // [Re-added] Service needs to read from DB now
+	cacheRepo domain.LogCacheRepository // Renamed from statsRepo
 }
 
-// NewLogService injects dependencies.
-func NewLogService(logRepo domain.LogRepository, statsRepo domain.StatsRepository) *LogService {
+// Update Constructor
+func NewLogService(producer domain.LogProducer, logRepo domain.LogRepository, cacheRepo domain.LogCacheRepository) *LogService {
 	return &LogService{
+		producer:  producer,
 		logRepo:   logRepo,
-		statsRepo: statsRepo,
+		cacheRepo: cacheRepo,
 	}
 }
 
-// CreateLog executes the business flow: Save Log -> Increment Counter -> Get Total Count.
+// CreateLog
 func (s *LogService) CreateLog(ctx context.Context, entry *domain.LogEntry) (int64, error) {
-	// 1. Persist log to MySQL
-	if err := s.logRepo.Create(ctx, entry); err != nil {
+	if err := s.producer.SendLog(ctx, entry); err != nil {
 		return 0, err
 	}
+	_ = s.cacheRepo.IncrementLogCount(ctx)
+	return s.cacheRepo.GetLogCount(ctx)
+}
 
-	// 2. Increment Redis counter
-	// Note: We ignore the error here for now to avoid failing the request if only cache is down.
-	// In production, we should log this error.
-	_ = s.statsRepo.IncrementLogCount(ctx)
+// [NEW] GetLog implements Cache-Aside Pattern
+func (s *LogService) GetLog(ctx context.Context, id uint) (*domain.LogEntry, error) {
+	// 1. Check Redis Cache (Fast Path)
+	cachedEntry, err := s.cacheRepo.GetLog(ctx, id)
+	if err != nil {
+		log.Printf("[Warn] Cache error: %v", err)
+		// Don't fail the request if cache is down, just proceed to DB
+	}
+	if cachedEntry != nil {
+		log.Println("[Cache] Hit")
+		return cachedEntry, nil
+	}
 
-	// 3. Retrieve current total count
-	return s.statsRepo.GetLogCount(ctx)
+	// 2. Cache Miss -> Check MySQL (Slow Path)
+	log.Println("[Cache] Miss, querying DB...")
+	dbEntry, err := s.logRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Write back to Cache (Async or Sync)
+	// We do it synchronously here for simplicity
+	if err := s.cacheRepo.SetLog(ctx, dbEntry); err != nil {
+		log.Printf("[Warn] Failed to set cache: %v", err)
+	}
+
+	return dbEntry, nil
 }
