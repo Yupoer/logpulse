@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// LogEntry (保持不變)
+// LogEntry
 type LogEntry struct {
 	gorm.Model
 	ServiceName string    `json:"service_name" gorm:"index"`
@@ -16,24 +16,28 @@ type LogEntry struct {
 	Timestamp   time.Time `json:"timestamp"`
 }
 
-// LogRepository (MySQL) - 增加 FindByID
+// LogRepository (MySQL)
 type LogRepository interface {
 	Create(ctx context.Context, entry *LogEntry) error
-	GetByID(ctx context.Context, id uint) (*LogEntry, error) // [新增]
+	GetByID(ctx context.Context, id uint) (*LogEntry, error)
 }
 
-// LogCacheRepository (Redis) - 結合了原本的 Stats 和新的 Cache 功能
-// 這裡我們把 StatsRepository 改名為更通用的 LogCacheRepository
+// LogCacheRepository (Redis)
 type LogCacheRepository interface {
 	IncrementLogCount(ctx context.Context) error
 	GetLogCount(ctx context.Context) (int64, error)
-	// [新增] 快取操作
+	// cache operations
 	SetLog(ctx context.Context, entry *LogEntry) error
 	GetLog(ctx context.Context, id uint) (*LogEntry, error)
 }
 
-// LogProducer (保持不變)
+// LogProducer
 type LogProducer interface {
 	SendLog(ctx context.Context, entry *LogEntry) error
 	Close() error
+}
+
+// LogSearchRepository elasticsearch
+type LogSearchRepository interface {
+	BulkIndex(ctx context.Context, entries []*LogEntry) error
 }

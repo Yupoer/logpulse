@@ -48,6 +48,14 @@ func main() {
 	}
 	defer producer.Close()
 
+	// --- Elasticsearch Repository ---
+	esRepo, err := repository.NewESLogRepository(cfg.ESAddress)
+	if err != nil {
+		// Log Warning instead of Fatal, allow app to start even if ES is temporarily down (optional strategy)
+		// But for now, let's fail fast to ensure config is correct
+		log.Fatalf("Failed to connect to Elasticsearch: %v", err)
+	}
+
 	// 3. Dependency Injection (Wiring)
 	cacheRepo := repository.NewLogCacheRepository(rdb) // Renamed constructor
 	logRepo := repository.NewLogRepository(db)         // We need this for Service now
@@ -56,9 +64,9 @@ func main() {
 	logService := service.NewLogService(producer, logRepo, cacheRepo)
 	logHandler := handler.NewLogHandler(logService)
 
-	// --- [NEW] Start Kafka Consumer Worker (Background Job) ---
+	// --- Start Kafka Consumer Worker (Background Job) ---
 	// We run this in a separate goroutine so it doesn't block the HTTP server.
-	consumerWorker := repository.NewKafkaConsumer(logRepo)
+	consumerWorker := repository.NewKafkaConsumer(logRepo, esRepo)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Ensure cleanup on exit
 

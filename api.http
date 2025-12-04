@@ -7,21 +7,18 @@ Content-Type: application/json
 {
     "service_name": "cache-demo",
     "level": "INFO",
-    "message": "Verify Cache Mechanism"
+    "message": "I am a log"
 }
 
 ### 2. Get Log by ID 
 # if is db first data GET ID = 1
 # "[Cache] Miss, querying DB..."
-GET http://localhost:8080/logs/1
+GET http://localhost:8080/logs/5
 
 ### 3. Get Log by ID 
 # request again
 # "[Cache] Hit" 
-GET http://localhost:8080/logs/1
+GET http://localhost:8080/logs/5
 
-Check Health: 
+### 4. Check Health 
 GET http://localhost:8080/ping
-
-Create Log: 
-POST http://localhost:8080/logs

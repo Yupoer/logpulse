@@ -12,8 +12,9 @@ type Config struct {
 	ServerPort   string
 	DBUrl        string
 	RedisAddr    string
-	KafkaBrokers []string // Changed to slice for multiple brokers
+	KafkaBrokers []string
 	KafkaTopic   string
+	ESAddress    string
 }
 
 func LoadConfig() *Config {
@@ -43,5 +44,6 @@ func LoadConfig() *Config {
 		RedisAddr:    os.Getenv("REDIS_ADDR"),
 		KafkaBrokers: brokerList,
 		KafkaTopic:   os.Getenv("KAFKA_TOPIC"),
+		ESAddress:    os.Getenv("ELASTICSEARCH_ADDRESS"),
 	}
 }

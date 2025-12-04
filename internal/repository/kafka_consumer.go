@@ -4,27 +4,29 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/Yupoer/logpulse/internal/domain"
 )
 
-// KafkaConsumer represents the worker that consumes logs.
 type KafkaConsumer struct {
-	repo domain.LogRepository // Dependency: Needs to write to MySQL
+	mysqlRepo domain.LogRepository
+	esRepo    domain.LogSearchRepository // [New] Dependency
 }
 
-// NewKafkaConsumer creates a new consumer logic instance.
-func NewKafkaConsumer(repo domain.LogRepository) *KafkaConsumer {
-	return &KafkaConsumer{repo: repo}
+// Updated Constructor
+func NewKafkaConsumer(mysqlRepo domain.LogRepository, esRepo domain.LogSearchRepository) *KafkaConsumer {
+	return &KafkaConsumer{
+		mysqlRepo: mysqlRepo,
+		esRepo:    esRepo,
+	}
 }
 
-// StartConsumerGroup starts the infinite loop to consume messages.
-// This is a blocking function, so it should be run in a goroutine.
 func (c *KafkaConsumer) StartConsumerGroup(ctx context.Context, brokers []string, topic string, groupID string) {
 	config := sarama.NewConfig()
 	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.NewBalanceStrategyRoundRobin()}
-	config.Consumer.Offsets.Initial = sarama.OffsetOldest // Start from the beginning if no offset is saved
+	config.Consumer.Offsets.Initial = sarama.OffsetOldest
 
 	client, err := sarama.NewConsumerGroup(brokers, groupID, config)
 	if err != nil {
@@ -32,52 +34,93 @@ func (c *KafkaConsumer) StartConsumerGroup(ctx context.Context, brokers []string
 		return
 	}
 
-	// Loop to keep consuming even after rebalancing
 	for {
+		// Consume is blocking, but our ConsumeClaim now handles the batch logic
 		if err := client.Consume(ctx, []string{topic}, c); err != nil {
 			log.Printf("Error from consumer: %v", err)
-			return
+			// Small backoff to avoid tight loop on error
+			time.Sleep(2 * time.Second)
 		}
-		// check if context was cancelled, signaling that the consumer should stop
 		if ctx.Err() != nil {
 			return
 		}
 	}
 }
 
-// --- Implementing sarama.ConsumerGroupHandler Interface ---
+func (c *KafkaConsumer) Setup(sarama.ConsumerGroupSession) error   { return nil }
+func (c *KafkaConsumer) Cleanup(sarama.ConsumerGroupSession) error { return nil }
 
-// Setup is run at the beginning of a new session, before ConsumeClaim.
-func (c *KafkaConsumer) Setup(sarama.ConsumerGroupSession) error {
-	return nil
-}
-
-// Cleanup is run at the end of a session, once all ConsumeClaim goroutines have exited.
-func (c *KafkaConsumer) Cleanup(sarama.ConsumerGroupSession) error {
-	return nil
-}
-
-// ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
+// ConsumeClaim implements the Batch Processing Logic
 func (c *KafkaConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	for msg := range claim.Messages() {
-		// 1. Deserialize JSON
-		var entry domain.LogEntry
-		if err := json.Unmarshal(msg.Value, &entry); err != nil {
-			log.Printf("Failed to unmarshal log: %v", err)
-			continue
-		}
+	const batchSize = 100
+	const flushInterval = 1 * time.Second
 
-		// 2. Write to MySQL (Idempotency check could be added here)
-		// We use context.Background() because the worker lifecycle is independent of the HTTP request
-		if err := c.repo.Create(context.Background(), &entry); err != nil {
-			log.Printf("Failed to save log to DB: %v", err)
-			// Decide: Retry? Dead Letter Queue? For MVP, we just log error.
+	// Buffer to hold logs
+	batch := make([]*domain.LogEntry, 0, batchSize)
+
+	// Ticker for time-based flush
+	ticker := time.NewTicker(flushInterval)
+	defer ticker.Stop()
+
+	// Helper function to flush batch to ES
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		// Write to ES
+		if err := c.esRepo.BulkIndex(context.Background(), batch); err != nil {
+			log.Printf("Failed to bulk index to ES: %v", err)
 		} else {
-			log.Printf("[Worker] Consumed & Saved: %s", entry.Message)
+			log.Printf("[Worker] Bulk Indexed %d logs to ES", len(batch))
 		}
-
-		// 3. Mark message as processed
-		session.MarkMessage(msg, "")
+		// Reset buffer (keep capacity)
+		batch = batch[:0]
 	}
-	return nil
+
+	for {
+		select {
+		case msg, ok := <-claim.Messages():
+			if !ok {
+				flush() // Channel closed, flush remaining
+				return nil
+			}
+
+			// 1. Unmarshal
+			var entry domain.LogEntry
+			if err := json.Unmarshal(msg.Value, &entry); err != nil {
+				log.Printf("Failed to unmarshal log: %v", err)
+				session.MarkMessage(msg, "") // Skip bad message
+				continue
+			}
+
+			// 2. Write to MySQL (Sync backup) - 保持逐筆寫入以確保資料安全性 (MVP)
+			if err := c.mysqlRepo.Create(context.Background(), &entry); err != nil {
+				log.Printf("Failed to save log to DB: %v", err)
+			} else {
+				// Optional: Logging every single insert might be too noisy now
+				// log.Printf("[Worker] Saved to MySQL: %s", entry.Message)
+			}
+
+			// 3. Add to Batch for ES
+			batch = append(batch, &entry)
+
+			// 4. Check Batch Size
+			if len(batch) >= batchSize {
+				flush()
+				// Only mark offset after successful processing?
+				// For simplicity, we mark here. ideally should be after flush success.
+			}
+
+			session.MarkMessage(msg, "")
+
+		case <-ticker.C:
+			// 5. Time Trigger
+			flush()
+
+		case <-session.Context().Done():
+			// 6. Graceful Shutdown
+			flush()
+			return nil
+		}
+	}
 }
