@@ -48,24 +48,19 @@ func main() {
 	}
 	defer producer.Close()
 
-	// --- Elasticsearch Repository ---
+	// ES Repo 初始化
 	esRepo, err := repository.NewESLogRepository(cfg.ESAddress)
 	if err != nil {
-		// Log Warning instead of Fatal, allow app to start even if ES is temporarily down (optional strategy)
-		// But for now, let's fail fast to ensure config is correct
 		log.Fatalf("Failed to connect to Elasticsearch: %v", err)
 	}
 
-	// 3. Dependency Injection (Wiring)
-	cacheRepo := repository.NewLogCacheRepository(rdb) // Renamed constructor
-	logRepo := repository.NewLogRepository(db)         // We need this for Service now
+	statsRepo := repository.NewLogCacheRepository(rdb)
+	logRepo := repository.NewLogRepository(db)
 
-	// Updated Service Injection
-	logService := service.NewLogService(producer, logRepo, cacheRepo)
+	logService := service.NewLogService(producer, logRepo, statsRepo, esRepo)
 	logHandler := handler.NewLogHandler(logService)
 
-	// --- Start Kafka Consumer Worker (Background Job) ---
-	// We run this in a separate goroutine so it doesn't block the HTTP server.
+	// Start Kafka Consumer Worker (Background Job)
 	consumerWorker := repository.NewKafkaConsumer(logRepo, esRepo)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Ensure cleanup on exit
@@ -81,7 +76,8 @@ func main() {
 	r := gin.Default()
 	r.GET("/ping", func(c *gin.Context) { c.JSON(200, gin.H{"message": "pong"}) })
 	r.POST("/logs", logHandler.CreateLog)
-	r.GET("/logs/:id", logHandler.GetLog) // [NEW] Register Route
+	r.GET("/logs/:id", logHandler.GetLog)
+	r.GET("/logs/search", logHandler.SearchLogs)
 
 	// 5. Server Setup with Graceful Shutdown
 	srv := &http.Server{

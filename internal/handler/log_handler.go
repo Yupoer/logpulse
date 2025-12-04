@@ -42,7 +42,7 @@ func (h *LogHandler) CreateLog(c *gin.Context) {
 	})
 }
 
-// [NEW] GetLog
+// GetLog
 func (h *LogHandler) GetLog(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -58,4 +58,24 @@ func (h *LogHandler) GetLog(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, entry)
+}
+
+// SearchLogs handles GET /logs/search?q=keyword
+func (h *LogHandler) SearchLogs(c *gin.Context) {
+	query := c.Query("q")
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Query parameter 'q' is required"})
+		return
+	}
+
+	logs, err := h.service.SearchLogs(c.Request.Context(), query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Search failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count": len(logs),
+		"data":  logs,
+	})
 }

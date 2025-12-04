@@ -40,4 +40,5 @@ type LogProducer interface {
 // LogSearchRepository elasticsearch
 type LogSearchRepository interface {
 	BulkIndex(ctx context.Context, entries []*LogEntry) error
+	Search(ctx context.Context, query string) ([]*LogEntry, error)
 }
