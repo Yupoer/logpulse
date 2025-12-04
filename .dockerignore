@@ -1,0 +1,12 @@
+.git
+.vscode
+.idea
+mysql_data
+redis_data
+docker-compose.yml
+Dockerfile
+README.md
+DEV_LOG.md
+SyntaxDebt.md
+api.http
+bin
