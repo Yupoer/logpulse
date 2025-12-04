@@ -19,3 +19,9 @@ GET http://localhost:8080/logs/1
 # request again
 # "[Cache] Hit" 
 GET http://localhost:8080/logs/1
+
+Check Health: 
+GET http://localhost:8080/ping
+
+Create Log: 
+POST http://localhost:8080/logs

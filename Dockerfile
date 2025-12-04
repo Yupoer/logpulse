@@ -2,7 +2,7 @@
 # Stage 1: Builder (編譯層)
 # 使用包含 Go 編譯器的完整映像檔
 # ==========================================
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # 設定工作目錄
 WORKDIR /app
