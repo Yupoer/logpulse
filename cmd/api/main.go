@@ -33,7 +33,9 @@ func main() {
 		log.Fatalf("MySQL Connection Failed: %v", err)
 	}
 	// Warning: AutoMigrate should be avoided in production
-	db.AutoMigrate(&domain.LogEntry{})
+	if err := db.AutoMigrate(&domain.LogEntry{}); err != nil {
+		log.Fatalf("Database migration failed: %v", err)
+	}
 
 	// Redis
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
@@ -46,7 +48,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize Kafka Producer: %v", err)
 	}
-	defer producer.Close()
+	defer func() { _ = producer.Close() }()
 
 	// ES Repo 初始化
 	esRepo, err := repository.NewESLogRepository(cfg.ESAddress)

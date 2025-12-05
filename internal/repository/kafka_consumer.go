@@ -96,9 +96,6 @@ func (c *KafkaConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim 
 			// 2. Write to MySQL (Sync backup) - 保持逐筆寫入以確保資料安全性 (MVP)
 			if err := c.mysqlRepo.Create(context.Background(), &entry); err != nil {
 				log.Printf("Failed to save log to DB: %v", err)
-			} else {
-				// Optional: Logging every single insert might be too noisy now
-				// log.Printf("[Worker] Saved to MySQL: %s", entry.Message)
 			}
 
 			// 3. Add to Batch for ES

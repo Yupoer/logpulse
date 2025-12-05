@@ -30,7 +30,7 @@ func NewESLogRepository(address string) (domain.LogSearchRepository, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	return &esLogRepository{client: client}, nil
 }
@@ -68,7 +68,7 @@ func (r *esLogRepository) BulkIndex(ctx context.Context, entries []*domain.LogEn
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.IsError() {
 		return fmt.Errorf("bulk indexing failed: %s", res.String())
@@ -105,7 +105,7 @@ func (r *esLogRepository) Search(ctx context.Context, query string) ([]*domain.L
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.IsError() {
 		return nil, fmt.Errorf("search request failed: %s", res.Status())

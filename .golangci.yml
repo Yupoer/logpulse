@@ -1,0 +1,20 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck    # 確保你沒有忽略 error
+    - gosimple    # 檢查是否有更簡單的寫法
+    - govet       # Go 官方檢查工具
+    - ineffassign # 檢查無效的賦值
+    - staticcheck # 靜態分析
+    - typecheck
+    - unused      # 檢查沒用到的變數/常數
+    - gocyclo     # 檢查函式是否太複雜 (太多 if/else)
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15 # 函式複雜度超過 15 就報錯
+
+issues:
+  exclude-use-default: false
