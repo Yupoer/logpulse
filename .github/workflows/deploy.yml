@@ -23,7 +23,6 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile # dockerfile path
           push: true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/logpulse:latest
