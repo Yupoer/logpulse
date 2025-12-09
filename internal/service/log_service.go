@@ -11,16 +11,15 @@ type LogService struct {
 	producer  domain.LogProducer
 	logRepo   domain.LogRepository
 	cacheRepo domain.LogCacheRepository
-	esRepo    domain.LogSearchRepository // [修正] 補上這個欄位，不然編譯器不認識 s.esRepo
+	esRepo    domain.LogSearchRepository
 }
 
-// [修正] 建構函式多了一個 esRepo 參數
 func NewLogService(producer domain.LogProducer, logRepo domain.LogRepository, cacheRepo domain.LogCacheRepository, esRepo domain.LogSearchRepository) *LogService {
 	return &LogService{
 		producer:  producer,
 		logRepo:   logRepo,
 		cacheRepo: cacheRepo,
-		esRepo:    esRepo, // [修正] 記得賦值
+		esRepo:    esRepo,
 	}
 }
 

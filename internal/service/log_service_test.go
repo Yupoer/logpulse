@@ -10,7 +10,7 @@ import (
 )
 
 // --- Mocks ---
-// 我們不需要真的連 Redis/Kafka，只要模擬它們的行為
+// simulate behavior of producer, cache, log, es
 
 type MockProducer struct {
 	mock.Mock
@@ -61,14 +61,14 @@ func TestCreateLog(t *testing.T) {
 	// 1. Setup
 	mockProducer := new(MockProducer)
 	mockCache := new(MockCacheRepo)
-	mockLogRepo := new(MockLogRepo) // 不需要用到，但要傳進去
-	mockESRepo := new(MockESRepo)   // 不需要用到，但要傳進去
+	mockLogRepo := new(MockLogRepo)
+	mockESRepo := new(MockESRepo)
 
-	// 定義預期行為: 當 SendLog 被呼叫時，回傳 nil (成功)
+	// define expected behavior: when SendLog is called, return nil (success)
 	mockProducer.On("SendLog", mock.Anything, mock.Anything).Return(nil)
-	// 定義預期行為: 當 Increment 被呼叫時，回傳 nil
+	// define expected behavior: when Increment is called, return nil
 	mockCache.On("IncrementLogCount", mock.Anything).Return(nil)
-	// 定義預期行為: 當 GetLogCount 被呼叫時，回傳 100
+	// define expected behavior: when GetLogCount is called, return 100
 	mockCache.On("GetLogCount", mock.Anything).Return(100, nil)
 
 	service := NewLogService(mockProducer, mockLogRepo, mockCache, mockESRepo)
@@ -77,11 +77,11 @@ func TestCreateLog(t *testing.T) {
 	entry := &domain.LogEntry{ServiceName: "test", Message: "hello"}
 	count, err := service.CreateLog(context.Background(), entry)
 
-	// 3. Assert (驗證結果)
+	// 3. Assert (verify result)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(100), count)
 
-	// 驗證 Mock 物件是否真的被呼叫了
+	// verify mock objects are called as expected
 	mockProducer.AssertExpectations(t)
 	mockCache.AssertExpectations(t)
 }

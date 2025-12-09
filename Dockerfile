@@ -7,7 +7,6 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /app
 
 # 1. Download dependencies (use Docker Layer Caching)
-# 先 Copy go.mod 和 go.sum，如果這兩個檔沒變，Docker 會直接用快取，不重新下載
 COPY go.mod go.sum ./
 RUN go mod download
 

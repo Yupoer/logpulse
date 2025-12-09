@@ -4,13 +4,11 @@ services:
   # --- 1. Go Application (LogPulse) ---
   app:
     image: logpulse:v1
-    container_name: logpulse-app
+    #container_name: logpulse-app
     restart: always
     build:
       context: ..
       dockerfile: Dockerfile
-    ports:
-      - "${APP_PORT:-8080}:8080"
     depends_on:
       - mysql
       - kafka
@@ -18,7 +16,6 @@ services:
       - elasticsearch
     environment:
       SERVER_PORT: 8080
-
       # MySQL Config
       DB_HOST: mysql
       DB_PORT: 3306
@@ -38,6 +35,9 @@ services:
 
     networks:
       - logpulse-net
+
+    deploy:
+      replicas: 3
 
   # --- 2. MySQL ---
   mysql:
@@ -95,8 +95,11 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_NUM_PARTITIONS: 3
     networks:
       - logpulse-net
+    volumes:
+      - kafka_data:/var/lib/kafka/data
 
   # --- 6. Elasticsearch (Search Engine) ---
   elasticsearch:
@@ -126,11 +129,25 @@ services:
     networks:
       - logpulse-net
 
-volumes:
-  mysql_data:
-  redis_data:
-  es_data:
+  # --- 8. Nginx (Reverse Proxy) ---
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - app
+    networks:
+      - logpulse-net
 
+volumes:
+  mysql_data: {}
+  redis_data: {}
+  es_data: {}
+  zookeeper_data: {}
+  zookeeper_log: {}
+  kafka_data: {}
 
 networks:
   logpulse-net:

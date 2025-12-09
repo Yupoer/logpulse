@@ -25,10 +25,11 @@ The system follows an Event-Driven Architecture:
 
 ```mermaid
 graph LR
-    Client[Client] -->|HTTP POST| API[Go API Gateway]
+    Client[Client] -->|HTTP POST| Nginx[Nginx Load Balancer]
+    Nginx -->|Round Robin| API["Go API Cluster (x3)"]
     API -->|Rate Limit| Redis[(Redis)]
-    API -->|Async Push| Kafka{Kafka Broker}
-    Kafka -->|Batch Pull| Worker[Go Worker]
+    API -->|Async Push - 3 Partitions| Kafka{Kafka Broker}
+    Kafka -->|Batch Pull - 3 Consumers| Worker["Go Worker Cluster (x3)"]
     Worker -->|Dual Write| ES[(Elasticsearch)]
     Worker -->|Persist| MySQL[(MySQL)]
 ```
@@ -104,6 +105,8 @@ We provide a `Makefile` to simplify common operations.
    ```
 
    This command will automatically build the images and start all services (App, MySQL, Redis, Kafka, ES, Kibana) in the background.
+   
+   > **Note:** By default, `make run` initializes **3 Go Application Replicas** (API + Worker) and **3 Kafka partitions/consumers** behind an **Nginx Load Balancer** to simulate a production-ready distributed environment.
 
 3. **Stop the application**
 
@@ -194,7 +197,9 @@ The project follows the Standard Go Project Layout:
 │   └── service/          # Business Logic
 ├── pkg/
 │   └── utils/            # Shared utilities
-├── .env                  # Environment variables (if don't have one, run 'make setup')
+├── nginx/
+│   └── nginx.conf        # Nginx Load Balancer Configuration
+├── .env                  # Environment variables (if don't have one, 'make run' will auto create one)
 ├── .golangci.yml         # Linting configuration
 ├── Dockerfile            # Container definition
 ├── Makefile              # Management commands

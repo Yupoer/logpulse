@@ -34,7 +34,7 @@ func (r *redisCacheRepository) GetLogCount(ctx context.Context) (int64, error) {
 	return strconv.ParseInt(val, 10, 64)
 }
 
-// --- [NEW] Caching Methods (Cache-Aside) ---
+// --- Caching Methods (Cache-Aside) ---
 
 func (r *redisCacheRepository) SetLog(ctx context.Context, entry *domain.LogEntry) error {
 	key := fmt.Sprintf("log:%d", entry.ID)
@@ -44,7 +44,7 @@ func (r *redisCacheRepository) SetLog(ctx context.Context, entry *domain.LogEntr
 		return err
 	}
 
-	// Set with 1 hour expiration (TTL)
+	// Set with 1 hour TTL
 	// This prevents the cache from growing indefinitely
 	return r.client.Set(ctx, key, bytes, 1*time.Hour).Err()
 }
@@ -55,7 +55,7 @@ func (r *redisCacheRepository) GetLog(ctx context.Context, id uint) (*domain.Log
 	val, err := r.client.Get(ctx, key).Bytes()
 	if err != nil {
 		if err == redis.Nil {
-			return nil, nil // Cache Miss (Not an error)
+			return nil, nil // Cache Miss (Not error)
 		}
 		return nil, err // System Error
 	}
