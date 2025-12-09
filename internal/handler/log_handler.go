@@ -37,7 +37,7 @@ func (h *LogHandler) CreateLog(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message":      "Log saved",
-		"id":           entry.ID, // Note: This will be 0 because it's async!
+		"id":           entry.ID, // Note: This will be 0 (async)
 		"total_logged": totalCount,
 	})
 }

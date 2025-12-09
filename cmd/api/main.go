@@ -50,7 +50,7 @@ func main() {
 	}
 	defer func() { _ = producer.Close() }()
 
-	// ES Repo 初始化
+	// ES Repo init
 	esRepo, err := repository.NewESLogRepository(cfg.ESAddress)
 	if err != nil {
 		log.Fatalf("Failed to connect to Elasticsearch: %v", err)
@@ -62,7 +62,7 @@ func main() {
 	logService := service.NewLogService(producer, logRepo, statsRepo, esRepo)
 	logHandler := handler.NewLogHandler(logService)
 
-	// Start Kafka Consumer Worker (Background Job)
+	// Start Kafka Consumer Worker (Background)
 	consumerWorker := repository.NewKafkaConsumer(logRepo, esRepo)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Ensure cleanup on exit
@@ -70,7 +70,7 @@ func main() {
 	go func() {
 		log.Println("Starting Kafka Consumer Worker...")
 		// "logpulse-group" is the Consumer Group ID.
-		// If you run multiple instances of this app, they will share the load.
+		// If run multiple instances of this app, they will share the load.
 		consumerWorker.StartConsumerGroup(ctx, cfg.KafkaBrokers, cfg.KafkaTopic, "logpulse-group")
 	}()
 

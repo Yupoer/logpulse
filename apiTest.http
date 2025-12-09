@@ -1,0 +1,75 @@
+# ====== use REST Client Extension ========
+### Global Variables
+@host = http://localhost:8080
+@contentType = application/json
+
+# ==========================================
+# 1. System Health Check 
+# ==========================================
+### Ping (Smoke Test)
+# test API Gateway working
+GET {{host}}/ping
+
+# ==========================================
+# 2. Log Ingestion (Write - Command)
+# API -> Kafka -> Worker -> MySQL & Elasticsearch
+# ==========================================
+### Create Log - INFO (General Message)
+POST {{host}}/logs
+Content-Type: {{contentType}}
+
+{
+    "service_name": "auth-service",
+    "level": "INFO",
+    "message": "User login successful via OAuth",
+    "timestamp": "2025-12-05T10:00:00Z"
+}
+
+### Create Log - ERROR (Error Message)
+POST {{host}}/logs
+Content-Type: {{contentType}}
+
+{
+    "service_name": "payment-service",
+    "level": "ERROR",
+    "message": "Database connection timeout during transaction",
+    "timestamp": "2025-12-05T10:05:00Z"
+}
+
+### Create Log - DEBUG (Batch Test)
+# send multiple times, observe Bulk Indexing(use 'make logs')
+POST {{host}}/logs
+Content-Type: {{contentType}}
+
+{
+    "service_name": "order-service",
+    "level": "DEBUG",
+    "message": "Processing order #1024 items",
+    "timestamp": "2025-12-05T10:10:00Z"
+}
+
+# ==========================================
+# 3. Direct Retrieval (Read - MySQL/Redis)
+# API -> Redis -> Miss? -> MySQL -> Set Redis
+# ==========================================
+### Get Log by ID (Cache-Aside Pattern)
+# first request: [Cache Miss] read from MySQL and write to Redis
+# second request: [Cache Hit] directly from Redis
+# replace '1' with your actual existing ID
+GET {{host}}/logs/1
+
+# ==========================================
+# 4. Search & Analytics (Search - CQRS/Elasticsearch)
+# Elasticsearch -> Search -> Return
+# ==========================================
+### Search by Keyword (Search)
+# test Elasticsearch indexing. try search "login", "timeout", "order"
+GET {{host}}/logs/search?q=timeout
+
+### Search by Service Name
+# search specific service log
+GET {{host}}/logs/search?q=payment-service
+
+### Search by Level
+# search ERROR Logs
+GET {{host}}/logs/search?q=ERROR

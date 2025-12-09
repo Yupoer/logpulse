@@ -12,7 +12,7 @@ import (
 
 type KafkaConsumer struct {
 	mysqlRepo domain.LogRepository
-	esRepo    domain.LogSearchRepository // [New] Dependency
+	esRepo    domain.LogSearchRepository
 }
 
 // Updated Constructor

@@ -1,6 +1,5 @@
 # --- Security ---
 .env
-.env.*
 
 # --- Go Build Binaries ---
 # Windows
