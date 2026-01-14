@@ -19,59 +19,6 @@ Built with a Microservices mindset, LogPulse ensures data consistency and system
 ![Kibana Discover Dashboard](assets/kibana_discover_logs.png)
 ![Kibana Discover Dashboard](assets/kibana_discover_logs_expand.png)
 
-### Architecture
-
-The system follows an Event-Driven Architecture:
-
-```mermaid
-graph LR
-    Client[Client] -->|HTTP POST| Nginx[Nginx Load Balancer]
-    Nginx -->|Round Robin| API["Go API Cluster (x3)"]
-    API -->|Rate Limit| Redis[(Redis)]
-    API -->|Async Push - 3 Partitions| Kafka{Kafka Broker}
-    Kafka -->|Batch Pull - 3 Consumers| Worker["Go Worker Cluster (x3)"]
-    Worker -->|Dual Write| ES[(Elasticsearch)]
-    Worker -->|Persist| MySQL[(MySQL)]
-```
-
-```mermaid
-graph LR
-    subgraph "DevOps Pipeline"
-        Git[Push Code] --> GitHub[GitHub Actions]
-        GitHub --> Lint[GolangCI-Lint]
-        GitHub --> Test[Unit Test]
-        GitHub --> Docker[Build & Push Image]
-    end
-    
-    subgraph "Runtime System"
-        Client[Client] -->|HTTP| API[Go API]
-        API -->|Async| Kafka{Kafka}
-        Kafka --> Worker[Go Worker]
-        Worker --> ES[(Elasticsearch)]
-        Worker --> MySQL[(MySQL)]
-    end
-```
-
-### Design Decisions & Trade-offs
-
-* **Why Kafka over RabbitMQ?**
-    * LogPulse requires high-throughput sequential writing. Kafka's log-based storage offers superior performance for peak shaving (100k+ msg/sec) compared to RabbitMQ's complex routing.
-* **Why Elasticsearch?**
-    * MySQL performs poorly on fuzzy text search (`LIKE %...%`). ES provides Inverted Indexing, enabling O(1) search complexity for log keywords.
-* **Hybrid Data Strategy (The "Write-Async, Read-Aside" Pattern)**
-    * **Ingestion (Write):** We use **Asynchronous Write** via Kafka. This ensures the API remains low-latency (<10ms) even if the storage layer is under heavy load.
-    * **Retrieval (Read):** We employ the **Cache-Aside Pattern** for specific log retrieval. Data is loaded into Redis only upon request (Lazy Loading), optimizing memory usage by not caching the entire log stream.
-
-## Key Features
-
-*   **High Concurrency Ingestion**: Utilizing Kafka as a buffer to handle traffic spikes and prevent database overload (Peak Shaving).
-*   **Full-Text Search**: Integrated Elasticsearch for efficient log indexing and fuzzy search capabilities (CQRS Pattern).
-*   **Rate Limiting**: Implemented Redis (Token Bucket / Counter) to protect the API from abuse (DDoS protection).
-*   **Clean Architecture**: Codebase structured into Controller, Service, and Repository layers with Dependency Injection, ensuring testability and maintainability.
-*   **Fully Containerized**: "One-Click Deployment" for the entire stack (App, DB, Broker, Search) using Docker Compose.
-*   **CI/CD Pipeline**: Automated linting, testing, and image building via GitHub Actions.
-*   **DevOps Ready**: Implemented Graceful Shutdown and Health Checks for zero-downtime deployments.
-
 ## Getting Started
 
 ### System Requirements
@@ -175,6 +122,59 @@ Search logs via Elasticsearch.
 ```bash
 curl "http://localhost:8080/logs/search?q=timeout&level=error"
 ```
+
+## Key Features
+
+*   **High Concurrency Ingestion**: Utilizing Kafka as a buffer to handle traffic spikes and prevent database overload (Peak Shaving).
+*   **Full-Text Search**: Integrated Elasticsearch for efficient log indexing and fuzzy search capabilities (CQRS Pattern).
+*   **Rate Limiting**: Implemented Redis (Token Bucket / Counter) to protect the API from abuse (DDoS protection).
+*   **Clean Architecture**: Codebase structured into Controller, Service, and Repository layers with Dependency Injection, ensuring testability and maintainability.
+*   **Fully Containerized**: "One-Click Deployment" for the entire stack (App, DB, Broker, Search) using Docker Compose.
+*   **CI/CD Pipeline**: Automated linting, testing, and image building via GitHub Actions.
+*   **DevOps Ready**: Implemented Graceful Shutdown and Health Checks for zero-downtime deployments.
+
+## Architecture
+
+The system follows an Event-Driven Architecture:
+
+```mermaid
+graph LR
+    Client[Client] -->|HTTP POST| Nginx[Nginx Load Balancer]
+    Nginx -->|Round Robin| API["Go API Cluster (x3)"]
+    API -->|Rate Limit| Redis[(Redis)]
+    API -->|Async Push - 3 Partitions| Kafka{Kafka Broker}
+    Kafka -->|Batch Pull - 3 Consumers| Worker["Go Worker Cluster (x3)"]
+    Worker -->|Dual Write| ES[(Elasticsearch)]
+    Worker -->|Persist| MySQL[(MySQL)]
+```
+
+```mermaid
+graph LR
+    subgraph "DevOps Pipeline"
+        Git[Push Code] --> GitHub[GitHub Actions]
+        GitHub --> Lint[GolangCI-Lint]
+        GitHub --> Test[Unit Test]
+        GitHub --> Docker[Build & Push Image]
+    end
+    
+    subgraph "Runtime System"
+        Client[Client] -->|HTTP| API[Go API]
+        API -->|Async| Kafka{Kafka}
+        Kafka --> Worker[Go Worker]
+        Worker --> ES[(Elasticsearch)]
+        Worker --> MySQL[(MySQL)]
+    end
+```
+
+## Design Decisions & Trade-offs
+
+* **Why Kafka over RabbitMQ?**
+    * LogPulse requires high-throughput sequential writing. Kafka's log-based storage offers superior performance for peak shaving (100k+ msg/sec) compared to RabbitMQ's complex routing.
+* **Why Elasticsearch?**
+    * MySQL performs poorly on fuzzy text search (`LIKE %...%`). ES provides Inverted Indexing, enabling O(1) search complexity for log keywords.
+* **Hybrid Data Strategy (The "Write-Async, Read-Aside" Pattern)**
+    * **Ingestion (Write):** We use **Asynchronous Write** via Kafka. This ensures the API remains low-latency (<10ms) even if the storage layer is under heavy load.
+    * **Retrieval (Read):** We employ the **Cache-Aside Pattern** for specific log retrieval. Data is loaded into Redis only upon request (Lazy Loading), optimizing memory usage by not caching the entire log stream.
 
 ## Project Layout
 

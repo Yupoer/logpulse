@@ -1,0 +1,59 @@
+  █ THRESHOLDS
+
+    http_req_duration
+    ✓ 'p(95)<1000' p(95)=292.41ms
+
+    read_success_rate
+    ✓ 'rate>0.90' rate=100.00%
+
+    search_success_rate
+    ✓ 'rate>0.90' rate=100.00%
+
+    write_success_rate
+    ✓ 'rate>0.90' rate=99.93%
+
+
+  █ TOTAL RESULTS
+
+    checks_total.......: 756080 1798.735725/s
+    checks_succeeded...: 99.94% 755651 out of 756080
+    checks_failed......: 0.05%  429 out of 756080
+
+    ✗ write status is 201
+      ↳  99% — ✓ 702559 / ✗ 429
+    ✓ read status is 200 or 404
+    ✓ search status is 200
+    ✓ search returns array
+
+    CUSTOM
+    read_duration..................: avg=256.373245 min=2      med=238      max=6519  p(90)=286      p(95)=314
+    read_success_rate..............: 100.00% 27636 out of 27636
+    search_duration................: avg=339.119343 min=16     med=246      max=7428  p(90)=303      p(95)=400
+    search_success_rate............: 100.00% 12728 out of 12728
+    write_duration.................: avg=207.657478 min=1      med=221      max=7244  p(90)=272      p(95)=291
+    write_errors...................: 429     1.020603/s
+    write_success_rate.............: 99.93%  702559 out of 702988
+
+    HTTP
+    http_req_duration..............: avg=211.63ms   min=1.06ms med=222.06ms max=7.42s p(90)=273.23ms p(95)=292.41ms
+      { expected_response:true }...: avg=211.71ms   min=1.06ms med=222.08ms max=7.42s p(90)=273.25ms p(95)=292.43ms
+    http_req_failed................: 0.05%   429 out of 743453
+    http_reqs......................: 743453  1768.695735/s
+
+    EXECUTION
+    iteration_duration.............: avg=269.34ms   min=3.14ms med=273.39ms max=7.86s p(90)=347.9ms  p(95)=383.94ms
+    iterations.....................: 743352  1768.455453/s
+    vus............................: 7       min=4                max=600
+    vus_max........................: 600     min=600              max=600
+
+    NETWORK
+    data_received..................: 207 MB  492 kB/s
+    data_sent......................: 191 MB  455 kB/s
+
+
+
+                                                                                                                                 
+running (7m00.3s), 000/600 VUs, 743352 complete and 0 interrupted iterations                                                     
+write_load  ✓ [======================================] 000/500 VUs  7m0s                                                         
+read_load   ✓ [======================================] 00/60 VUs    4m0s                                                         
+search_load ✓ [======================================] 00/40 VUs    4m0s             

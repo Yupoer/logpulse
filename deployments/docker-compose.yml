@@ -19,9 +19,9 @@ services:
       # MySQL Config
       DB_HOST: mysql
       DB_PORT: 3306
-      DB_USER: user
-      DB_PASSWORD: password
-      DB_NAME: logpulse_db
+      DB_USER: ${MYSQL_USER:-user}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-password}
+      DB_NAME: ${MYSQL_DATABASE:-logpulse_db}
 
       # Redis Config
       REDIS_ADDR: redis:6379
@@ -45,10 +45,10 @@ services:
     container_name: logpulse-mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: logpulse_db
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-logpulse_db}
+      MYSQL_USER: ${MYSQL_USER:-user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-password}
     ports:
       - "${DB_PORT:-3306}:3306"
     volumes:
@@ -107,7 +107,9 @@ services:
     container_name: logpulse-es
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false # Disable security for local dev simplicity
+      # ⚠️ WARNING: Security is DISABLED for local development only!
+      # In production, you MUST enable xpack.security and configure authentication.
+      - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # Critical: Limit Heap Size to 512MB
     ports:
       - "${ES_PORT:-9200}:9200"

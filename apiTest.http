@@ -1,6 +1,6 @@
 # ====== use REST Client Extension ========
 ### Global Variables
-@host = http://localhost:8080
+@host = http://localhost
 @contentType = application/json
 
 # ==========================================
