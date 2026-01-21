@@ -19,6 +19,134 @@ Built with a Microservices mindset, LogPulse ensures data consistency and system
 ![Kibana Discover Dashboard](assets/kibana_discover_logs.png)
 ![Kibana Discover Dashboard](assets/kibana_discover_logs_expand.png)
 
+### Performance Benchmarks
+
+> Load testing results using [k6](https://k6.io/) with up to **600 concurrent VUs** over a 7-minute stress test.
+
+#### Stress Test Visualizations
+
+| Read/Write/Search Performance | Write Stress Test |
+|:-----------------------------:|:-----------------:|
+| ![Read Write Search](assets/read_write_search.png) | ![Write Stress Test](assets/write_stress_test.png) |
+
+#### k6 Load Test Results
+
+| Metric | Result |
+|--------|--------|
+| **Total Requests** | 743,453 |
+| **Throughput** | 1,768 req/s |
+| **Write Success Rate** | 99.93% |
+| **Read Success Rate** | 100.00% |
+| **Search Success Rate** | 100.00% |
+| **P95 Latency** | 292.41ms |
+| **Avg Response Time** | 211.63ms |
+
+<details>
+<summary>Detailed Test Report</summary>
+
+```
+█ THRESHOLDS
+
+  http_req_duration
+  ✓ 'p(95)<1000' p(95)=292.41ms
+
+  read_success_rate
+  ✓ 'rate>0.90' rate=100.00%
+
+  search_success_rate
+  ✓ 'rate>0.90' rate=100.00%
+
+  write_success_rate
+  ✓ 'rate>0.90' rate=99.93%
+
+█ TOTAL RESULTS
+
+  checks_total.......: 756080 1798.735725/s
+  checks_succeeded...: 99.94% 755651 out of 756080
+  checks_failed......: 0.05%  429 out of 756080
+
+  ✗ write status is 201
+    ↳  99% — ✓ 702559 / ✗ 429
+  ✓ read status is 200 or 404
+  ✓ search status is 200
+  ✓ search returns array
+
+  CUSTOM
+  read_duration..................: avg=256ms   p(95)=314ms
+  search_duration................: avg=339ms   p(95)=400ms
+  write_duration.................: avg=207ms   p(95)=291ms
+
+  HTTP
+  http_req_duration..............: avg=211.63ms p(95)=292.41ms
+  http_req_failed................: 0.05% 429 out of 743453
+  http_reqs......................: 743453 1768.695735/s
+
+  EXECUTION
+  iterations.....................: 743352 1768.455453/s
+  vus............................: max=600
+  running time...................: 7m00.3s
+```
+
+</details>
+
+#### Run Sample Stress Test
+
+We use [k6](https://k6.io/) for load testing. Install k6 and run:
+
+```bash
+# Install k6 (macOS)
+brew install k6
+
+# Install k6 (Windows via Chocolatey)
+choco install k6
+
+# Run the stress test (ensure the app is running first)
+k6 run stress_test.js
+```
+
+<details>
+<summary>Test Scenarios Configuration</summary>
+
+The stress test includes 3 concurrent scenarios:
+
+| Scenario | Peak VUs | Duration | Description |
+|----------|----------|----------|-------------|
+| **write_load** | 500 | 7 min | High-throughput log ingestion via `POST /logs` |
+| **read_load** | 60 | 4 min | Random log retrieval via `GET /logs/:id` |
+| **search_load** | 40 | 4 min | Keyword search via `GET /logs/search?q=` |
+
+**Thresholds:**
+- P95 response time < 1000ms
+- Write/Read/Search success rate > 90%
+
+</details>
+
+<details>
+<summary>Test Data Samples</summary>
+
+```javascript
+// Services tested
+const services = ['auth-service', 'payment-service', 'order-service', 'user-service', 'notification-service'];
+
+// Log levels
+const levels = ['INFO', 'WARN', 'ERROR', 'DEBUG'];
+
+// Sample messages
+const messages = [
+    'User login successful via OAuth',
+    'Database connection timeout during transaction',
+    'Processing order items',
+    'Cache miss, fetching from database',
+    'Payment processed successfully',
+    // ...
+];
+
+// Search keywords
+const searchKeywords = ['login', 'timeout', 'order', 'payment', 'ERROR', 'auth-service', 'user'];
+```
+
+</details>
+
 ## Getting Started
 
 ### System Requirements
