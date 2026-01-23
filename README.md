@@ -12,22 +12,217 @@ LogPulse is a cloud-native backend solution designed to handle massive scale log
 
 Built with a Microservices mindset, LogPulse ensures data consistency and system resilience through asynchronous messaging and a robust caching strategy.
 
-### Dashboard Preview
+## Table of Contents
 
-> Real-time log ingestion visualization in Kibana. This demonstrates the successful flow of data from the **Go API** through **Kafka** to **Elasticsearch**.
+- [Getting Started](#getting-started)
+  - [System Requirements](#system-requirements)
+  - [Prerequisites](#prerequisites)
+  - [Quick Start](#quick-start-recommended)
+  - [Manual Start](#manual-start-without-make)
+  - [Troubleshooting](#troubleshooting)
+- [API Usage Examples](#api-usage-examples)
+- [Key Features](#key-features)
+- [Architecture](#architecture)
+- [Performance Benchmarks](#performance-benchmarks)
+  - [Data Validation](#data-validation)
+  - [Stress Test Analysis](#stress-test-analysis)
+- [Rate Limiting](#rate-limiting)
+- [Design Decisions & Trade-offs](#design-decisions--trade-offs)
+- [Project Layout](#project-layout)
+- [License](#license)
 
-![Kibana Discover Dashboard](assets/kibana_discover_logs.png)
-![Kibana Discover Dashboard](assets/kibana_discover_logs_expand.png)
+## Getting Started
 
-### Performance Benchmarks
+### System Requirements
+
+Since this stack involves heavy infrastructure (Elasticsearch, Kafka), please ensure your environment meets the minimum requirements:
+
+* **RAM:** 4GB minimum free memory (8GB recommended).
+* **Disk:** 10GB free space.
+* **Note:** If you are running on low memory, consider disabling Kibana in `docker-compose.yml` to save resources.
+
+### Prerequisites
+
+* **Docker** & **Docker Compose** installed.
+* **Make** (Optional, for simplified commands).
+
+### Quick Start (Recommended)
+
+We provide a `Makefile` to simplify common operations.
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/Yupoer/logpulse.git
+   cd logpulse
+   ```
+
+2. **Run the application**
+
+   ```bash
+   make run
+   ```
+
+   This command will automatically build the images and start all services (App, MySQL, Redis, Kafka, ES, Kibana) in the background.
+   
+   > **Note:** By default, `make run` initializes **3 Go Application Replicas** (API + Worker) and **3 Kafka partitions/consumers** behind an **Nginx Load Balancer** to simulate a production-ready distributed environment.
+
+3. **Stop the application**
+
+   ```bash
+   make stop
+   ```
+
+### Manual Start (Without Make)
+
+If you are on Windows (without WSL) or don't have `make` installed, you can use the raw Docker commands:
+
+```bash
+# Start services
+docker-compose -f deployments/docker-compose.yml up -d --build
+
+# Stop services
+docker-compose -f deployments/docker-compose.yml down
+```
+
+### Verify Status
+
+```bash
+docker-compose ps
+# OR if you configured it in Makefile:
+# make ps
+```
+
+### Troubleshooting
+
+If you encounter `bind: address already in use` or Windows WinNAT port issues:
+
+1. Open the `.env` file in the root directory.
+2. Change the conflicting port (e.g., change `KIBANA_PORT` from `5601` to `5602`).
+3. Run `make run` again.
+
+## API Usage Examples
+
+### Quick Test (VS Code)
+
+We provide an `apiTest.http` file for convenient testing directly within VS Code.
+
+1. Install the **[REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)** extension.
+2. Open the `apiTest.http` file in this repository.
+3. Click the **Send Request** link that appears above each API call to interact with your running services.
+
+### 1. Ingest a Log (Producer)
+
+Send a log entry to the system. The API will respond immediately (Async).
+
+```bash
+curl -X POST http://localhost:8080/logs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "service": "payment-service",
+    "level": "error",
+    "message": "Transaction failed due to timeout",
+    "timestamp": "2023-12-05T10:00:00Z"
+  }'
+```
+
+### 2. Search Logs (Consumer & Reader)
+
+Search logs via Elasticsearch.
+
+```bash
+curl "http://localhost:8080/logs/search?q=timeout&level=error"
+```
+
+## Key Features
+
+*   **High Concurrency Ingestion**: Utilizing Kafka as a buffer to handle traffic spikes and prevent database overload (Peak Shaving).
+*   **Full-Text Search**: Integrated Elasticsearch for efficient log indexing and fuzzy search capabilities (CQRS Pattern).
+*   **Rate Limiting**: Implemented Redis (Token Bucket / Counter) to protect the API from abuse (DDoS protection).
+*   **Clean Architecture**: Codebase structured into Controller, Service, and Repository layers with Dependency Injection, ensuring testability and maintainability.
+*   **Fully Containerized**: "One-Click Deployment" for the entire stack (App, DB, Broker, Search) using Docker Compose.
+*   **CI/CD Pipeline**: Automated linting, testing, and image building via GitHub Actions.
+*   **DevOps Ready**: Implemented Graceful Shutdown and Health Checks for zero-downtime deployments.
+
+## Architecture
+
+The system follows an Event-Driven Architecture with separated read/write paths:
+
+```mermaid
+graph TB
+    Client[Client]
+    Nginx[Nginx Load Balancer]
+    
+    API["API Cluster<br/>(x3 Replicas)"]
+    Kafka[Kafka Broker<br/>3 Partitions]
+    Worker["Worker Cluster<br/>(x3 Consumers)"]
+    
+    Redis[(Redis<br/>Cache)]
+    MySQL[(MySQL<br/>Primary DB)]
+    ES[(Elasticsearch<br/>Search Engine)]
+    
+    %% Write Flow
+    Client -->|POST /logs| Nginx
+    Nginx -->|Round Robin| API
+    API -->|Rate Limit Check| Redis
+    API -.->|Async Push| Kafka
+    Kafka -->|Batch Pull| Worker
+    Worker -->|Persist| MySQL
+    Worker -->|Index| ES
+    
+    %% Read Flow
+    API -->|GET /logs/:id<br/>Cache Hit| Redis
+    Redis -.->|Cache Miss<br/>Fallback| MySQL
+    
+```
+
+### Flow Explanation
+
+**Write Path (Async):**
+1. Client sends log → Nginx load balancer
+2. Nginx distributes to one of **3 API replicas** (round-robin)
+3. API checks rate limit via **Redis**
+4. API pushes log to **Kafka** (async, returns immediately)
+5. Kafka distributes to **3 partitions** for parallel processing
+6. **3 Workers** (consumer group) pull batches from partitions
+7. Workers write to **MySQL** (persistence) and **Elasticsearch** (search indexing)
+
+**Read Path (Sync):**
+1. Client queries log → Nginx → API replica
+2. API checks **Redis cache** first (Cache-Aside pattern)
+3. **Cache Hit:** Return immediately
+4. **Cache Miss:** Fetch from **MySQL**, cache in Redis, then return
+
+**Why this architecture?**
+- **API Cluster (x3):** Handle high concurrency, zero downtime during deployment
+- **Kafka Broker:** Decouples ingestion from storage (peak shaving), allows backpressure handling
+- **3 Partitions:** Enables parallel consumption by 3 workers for higher throughput
+- **Worker Cluster (x3):** Matches partition count for optimal performance
+
+**CI/CD Pipeline:** GitHub Actions handles automated linting (GolangCI-Lint), unit testing, and Docker image building/pushing on every code push.
+
+## Performance Benchmarks
 
 > Load testing results using [k6](https://k6.io/) with up to **600 concurrent VUs** over a 7-minute stress test.
 
-#### Stress Test Visualizations
+### Data Validation
 
-| Read/Write/Search Performance | Write Stress Test |
-|:-----------------------------:|:-----------------:|
-| ![Read Write Search](assets/read_write_search.png) | ![Write Stress Test](assets/write_stress_test.png) |
+> **Elasticsearch Document Inspection:** Expanded view of an ingested log entry showing all indexed fields and values. This verifies that the complete data pipeline (Go API → Kafka → Elasticsearch) preserves data integrity and correctly maps structured fields (`service_name`, `level`, `message`, `timestamp`, etc.) for full-text search capabilities.
+
+![Kibana Discover Dashboard](assets/kibana_discover_logs_expand.png)
+
+### Stress Test Analysis
+
+**Scenario:** 600 concurrent VUs generating mixed workloads (write/read/search operations) over 7 minutes.
+
+**Key Observations:**
+
+- **Sustained Throughput:** 1,768 req/s average across all operations
+- **System Stability:** Consistent performance throughout the test duration (flat response time curve indicates no memory leaks or degradation)
+- **Peak Traffic Handling:** Successfully processed 743,453 total requests with 99.93% write success rate
+- **Latency Control:** P95 response time maintained below 300ms even under peak load
+
+![Read Write Search Performance](assets/read_write_search.png) 
 
 #### k6 Load Test Results
 
@@ -147,152 +342,46 @@ const searchKeywords = ['login', 'timeout', 'order', 'payment', 'ERROR', 'auth-s
 
 </details>
 
-## Getting Started
+## Rate Limiting
 
-### System Requirements
+LogPulse implements a **Redis-based Token Bucket** rate limiter to protect the API from excessive traffic and DDoS attacks.
 
-Since this stack involves heavy infrastructure (Elasticsearch, Kafka), please ensure your environment meets the minimum requirements:
+### Features
 
-* **RAM:** 4GB minimum free memory (8GB recommended).
-* **Disk:** 10GB free space.
-* **Note:** If you are running on low memory, consider disabling Kibana in `docker-compose.yml` to save resources.
+- **Token Bucket Algorithm**: Smooth rate limiting with configurable burst capacity
+- **Distributed**: Powered by Redis, ensuring consistent rate limiting across all API replicas
+- **Graceful Response**: Returns `429 Too Many Requests` when limit is exceeded
 
-### Prerequisites
+**How it works:**
 
-* **Docker** & **Docker Compose** installed.
-* **Make** (Optional, for simplified commands).
+The Token Bucket algorithm allows a configurable burst capacity (default: 100 tokens) for handling traffic spikes, then limits requests to a sustained rate (default: 50 requests/sec). Each request consumes 1 token. When the bucket is empty, requests are rejected with `429 Too Many Requests` until tokens refill.
 
-### Quick Start (Recommended)
+### Configuration
 
-We provide a `Makefile` to simplify common operations.
-
-1. **Clone the repository**
-
-   ```bash
-   git clone https://github.com/Yupoer/logpulse.git
-   cd logpulse
-   ```
-
-2. **Run the application**
-
-   ```bash
-   make run
-   ```
-
-   This command will automatically build the images and start all services (App, MySQL, Redis, Kafka, ES, Kibana) in the background.
-   
-   > **Note:** By default, `make run` initializes **3 Go Application Replicas** (API + Worker) and **3 Kafka partitions/consumers** behind an **Nginx Load Balancer** to simulate a production-ready distributed environment.
-
-3. **Stop the application**
-
-   ```bash
-   make stop
-   ```
-
-### Manual Start (Without Make)
-
-If you are on Windows (without WSL) or don't have `make` installed, you can use the raw Docker commands:
+Edit the `.env` file in the root directory to adjust rate limiting:
 
 ```bash
-# Start services
-docker-compose -f deployments/docker-compose.yml up -d --build
-
-# Stop services
-docker-compose -f deployments/docker-compose.yml down
+# --- Rate Limiting (Token Bucket) ---
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_CAPACITY=100    # Max burst requests (bucket capacity)
+RATE_LIMIT_RATE=50         # Tokens per second refill rate
 ```
 
-### Verify Status
+After modifying parameters, restart the application:
 
 ```bash
-docker-compose ps
-# OR if you configured it in Makefile:
-# make ps
+make restart
 ```
 
+### Testing
 
-### Troubleshooting
-
-If you encounter `bind: address already in use` or Windows WinNAT port issues:
-
-1. Open the `.env` file in the root directory.
-2. Change the conflicting port (e.g., change `KIBANA_PORT` from `5601` to `5602`).
-3. Run `make run` again.
-
-## API Usage Examples
-
-### Quick Test (VS Code)
-
-We provide an `apiTest.http` file for convenient testing directly within VS Code.
-
-1. Install the **[REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)** extension.
-2. Open the `apiTest.http` file in this repository.
-3. Click the **Send Request** link that appears above each API call to interact with your running services.
-
-### 1. Ingest a Log (Producer)
-
-Send a log entry to the system. The API will respond immediately (Async).
+Run the dedicated k6 test to verify rate limiting behavior:
 
 ```bash
-curl -X POST http://localhost:8080/logs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "service": "payment-service",
-    "level": "error",
-    "message": "Transaction failed due to timeout",
-    "timestamp": "2023-12-05T10:00:00Z"
-  }'
+k6 run test/ratelimit_test.js
 ```
 
-### 2. Search Logs (Consumer & Reader)
-
-Search logs via Elasticsearch.
-
-```bash
-curl "http://localhost:8080/logs/search?q=timeout&level=error"
-```
-
-## Key Features
-
-*   **High Concurrency Ingestion**: Utilizing Kafka as a buffer to handle traffic spikes and prevent database overload (Peak Shaving).
-*   **Full-Text Search**: Integrated Elasticsearch for efficient log indexing and fuzzy search capabilities (CQRS Pattern).
-*   **Rate Limiting**: Implemented Redis (Token Bucket / Counter) to protect the API from abuse (DDoS protection).
-*   **Clean Architecture**: Codebase structured into Controller, Service, and Repository layers with Dependency Injection, ensuring testability and maintainability.
-*   **Fully Containerized**: "One-Click Deployment" for the entire stack (App, DB, Broker, Search) using Docker Compose.
-*   **CI/CD Pipeline**: Automated linting, testing, and image building via GitHub Actions.
-*   **DevOps Ready**: Implemented Graceful Shutdown and Health Checks for zero-downtime deployments.
-
-## Architecture
-
-The system follows an Event-Driven Architecture:
-
-```mermaid
-graph LR
-    Client[Client] -->|HTTP POST| Nginx[Nginx Load Balancer]
-    Nginx -->|Round Robin| API["Go API Cluster (x3)"]
-    API -->|Rate Limit| Redis[(Redis)]
-    API -->|Async Push - 3 Partitions| Kafka{Kafka Broker}
-    Kafka -->|Batch Pull - 3 Consumers| Worker["Go Worker Cluster (x3)"]
-    Worker -->|Dual Write| ES[(Elasticsearch)]
-    Worker -->|Persist| MySQL[(MySQL)]
-```
-
-```mermaid
-graph LR
-    subgraph "DevOps Pipeline"
-        Git[Push Code] --> GitHub[GitHub Actions]
-        GitHub --> Lint[GolangCI-Lint]
-        GitHub --> Test[Unit Test]
-        GitHub --> Docker[Build & Push Image]
-    end
-    
-    subgraph "Runtime System"
-        Client[Client] -->|HTTP| API[Go API]
-        API -->|Async| Kafka{Kafka}
-        Kafka --> Worker[Go Worker]
-        Worker --> ES[(Elasticsearch)]
-        Worker --> MySQL[(MySQL)]
-    end
-```
+**Expected output:** With default config (capacity=100, rate=50/sec), approximately 12-15% of requests should be allowed, and 85-88% rate limited.
 
 ## Design Decisions & Trade-offs
 

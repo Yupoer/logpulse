@@ -18,6 +18,7 @@ import (
 	"github.com/Yupoer/logpulse/internal/config"
 	"github.com/Yupoer/logpulse/internal/domain"
 	"github.com/Yupoer/logpulse/internal/handler"
+	"github.com/Yupoer/logpulse/internal/middleware"
 	"github.com/Yupoer/logpulse/internal/repository"
 	"github.com/Yupoer/logpulse/internal/service"
 )
@@ -76,6 +77,11 @@ func main() {
 
 	// 4. Router Setup
 	r := gin.Default()
+
+	// Rate Limiter Middleware (Token Bucket via Redis Lua Script)
+	rateLimiter := middleware.NewRateLimiter(rdb, cfg.RateLimit)
+	r.Use(rateLimiter.Middleware())
+
 	r.GET("/ping", func(c *gin.Context) { c.JSON(200, gin.H{"message": "pong"}) })
 	r.POST("/logs", logHandler.CreateLog)
 	r.GET("/logs/:id", logHandler.GetLog)

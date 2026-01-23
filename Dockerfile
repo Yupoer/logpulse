@@ -14,7 +14,9 @@ RUN go mod download
 COPY . .
 # CGO_ENABLED=0: close CGO, ensure static binary
 # GOOS=linux: force compile for Linux (because container is running on Linux)
-RUN CGO_ENABLED=0 GOOS=linux go build -o logpulse cmd/api/main.go
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=linux go build -o logpulse cmd/api/main.go
 
 # ==========================================
 # Stage 2: Runner
