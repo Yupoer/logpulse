@@ -4,8 +4,6 @@
 [![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?style=flat&logo=docker)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
 
-> A high-throughput, distributed log aggregation system engineered with Go, Kafka, Elasticsearch, and Redis.
-
 ## Introduction
 
 LogPulse is a cloud-native backend solution designed to handle massive scale log ingestion and real-time analytics. It addresses the challenge of "Peak Shaving" in high-concurrency scenarios by decoupling the ingestion layer from the storage layer.
