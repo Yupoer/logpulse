@@ -1,0 +1,62 @@
+# =========================================================
+# LogPulse Go App —— 這是無狀態服務,是 k8s 所有亮點的主舞台
+#   - Deployment 管 ReplicaSet,ReplicaSet 維持副本數 (宣告即維持)
+#   - Service 取代手寫 Nginx,kube-proxy 自動做 L4 負載均衡
+#   - liveness/readiness probe 用現成的 /ping
+#   - resources.requests.cpu 是 HPA 計算 CPU 使用率的基準 (必填)
+# =========================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logpulse-app
+  labels: { app: logpulse }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: logpulse }
+  template:
+    metadata:
+      labels: { app: logpulse }
+    spec:
+      containers:
+        - name: logpulse
+          image: logpulse:v1
+          imagePullPolicy: IfNotPresent   # 用本機 build 的 image,不要去 registry 拉
+          ports:
+            - containerPort: 8080
+          # ---- 設定注入:非機密來自 ConfigMap,機密來自 Secret ----
+          envFrom:
+            - configMapRef: { name: logpulse-config }
+          env:
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: logpulse-secret, key: DB_PASSWORD } }
+          # ---- 健康檢查 ----
+          readinessProbe:        # 沒 ready 就不導流量進來
+            httpGet: { path: /ping, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:         # 掛了就自動重啟容器
+            httpGet: { path: /ping, port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          # ---- 資源 requests/limits (HPA 必須有 requests) ----
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "128Mi"
+---
+# Service:固定的 ClusterIP + DNS 名稱,自動把流量輪詢到所有健康的 app Pod
+# 這一個物件就取代了整個 nginx.conf upstream
+apiVersion: v1
+kind: Service
+metadata:
+  name: logpulse
+spec:
+  type: ClusterIP
+  selector: { app: logpulse }
+  ports:
+    - port: 80
+      targetPort: 8080

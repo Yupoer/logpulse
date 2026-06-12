@@ -1,0 +1,24 @@
+# =========================================================
+# HPA (Horizontal Pod Autoscaler)
+# 讀 metrics-server 提供的 CPU,平均使用率 > 50% (相對於 requests 的 100m)
+# 就增加 logpulse-app 的副本數,最少 2、最多 6。
+# 用 k6 壓測 /ping 時,可以看到 Pod 從 2 自動長到 6。
+# =========================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: logpulse-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: logpulse-app
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
