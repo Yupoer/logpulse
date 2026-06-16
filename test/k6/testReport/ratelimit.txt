@@ -1,0 +1,23 @@
+execution: local
+        script: test/k6/ratelimit_test.js
+
+     scenarios: (100.00%) 1 scenario, 20 max VUs, 1m0s max duration (incl. graceful stop):
+              * rate_limit_test: 20 looping VUs for 30s (gracefulStop: 30s)
+
+INFO[0030]
+========================================     source=console
+INFO[0030] Rate Limiting Test Results                    source=console                                                                                                                                                            
+INFO[0030] ========================================      source=console                                                                                                                                                            
+INFO[0030] Allowed (200):         1585 requests (14.09%)  source=console                                                                                                                                                           
+INFO[0030] Rate Limited (429):    9662 requests (85.91%)  source=console                                                                                                                                                           
+INFO[0030] Total Requests:       11247                   source=console                                                                                                                                                            
+INFO[0030] ========================================      source=console
+INFO[0030] With default config (capacity=100, rate=50/sec):  source=console
+INFO[0030]    - First ~100 requests use burst capacity   source=console
+INFO[0030]    - After that, ~50 requests/sec are allowed  source=console
+INFO[0030]    - VUs: 20 x 20 req/sec = 400 req/sec attempted  source=console
+INFO[0030]    - Expected: ~12.5% allowed, ~87.5% rate limited  source=console
+INFO[0030] ========================================      source=console
+
+running (0m30.0s), 00/20 VUs, 11247 complete and 0 interrupted iterations
+rate_limit_test ✓ [======================================] 20 VUs  30s

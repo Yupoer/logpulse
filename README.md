@@ -2,6 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)](https://golang.org/)
 [![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?style=flat&logo=docker)](https://www.docker.com/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-Ready-326CE5?style=flat&logo=kubernetes)](https://kubernetes.io/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
 
 ## Introduction
@@ -18,6 +19,11 @@ Built with a Microservices mindset, LogPulse ensures data consistency and system
   - [Quick Start](#quick-start-recommended)
   - [Manual Start](#manual-start-without-make)
   - [Troubleshooting](#troubleshooting)
+- [Kubernetes Deployment](#kubernetes-deployment)
+  - [Prerequisites](#k8s-prerequisites)
+  - [Deploy](#deploy)
+  - [Horizontal Pod Autoscaler](#horizontal-pod-autoscaler)
+  - [Teardown](#teardown)
 - [API Usage Examples](#api-usage-examples)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
@@ -99,6 +105,87 @@ If you encounter `bind: address already in use` or Windows WinNAT port issues:
 2. Change the conflicting port (e.g., change `KIBANA_PORT` from `5601` to `5602`).
 3. Run `make run` again.
 
+## Kubernetes Deployment
+
+LogPulse ships with a complete set of Kubernetes manifests under [k8s/](k8s/) for running the full stack in any Kubernetes cluster (local via minikube/kind or cloud-managed).
+
+### Architecture overview
+
+| Manifest | Purpose |
+|---|---|
+| [k8s/config-secret.yaml](k8s/config-secret.yaml) | `ConfigMap` (non-secret env vars) + `Secret` (DB credentials) |
+| [k8s/backends.yaml](k8s/backends.yaml) | Stateful backends: MySQL, Redis, Zookeeper, Kafka, Elasticsearch |
+| [k8s/app.yaml](k8s/app.yaml) | `logpulse-app` Deployment + ClusterIP Service |
+| [k8s/hpa.yaml](k8s/hpa.yaml) | `HorizontalPodAutoscaler` (CPU-based, 2–6 replicas) |
+
+> **Design note:** Backends use single-replica Deployments with `emptyDir` volumes (data is ephemeral) — appropriate for demo/testing. In production, use `StatefulSet` + PVC or a managed cloud service. The Kubernetes Service names (`mysql`, `redis`, `kafka`, `elasticsearch`) are intentionally identical to the Docker Compose service names so the app config requires zero changes between environments.
+
+### K8s Prerequisites
+
+* A running Kubernetes cluster (minikube, kind, Docker Desktop, or cloud-managed).
+* `kubectl` configured to target your cluster.
+* The `logpulse:v1` image available in your cluster's registry (or built locally with `docker build -t logpulse:v1 .` and loaded via `minikube image load logpulse:v1`).
+* Metrics Server installed (required for HPA): `kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml`
+
+### Deploy
+
+Apply the manifests in order:
+
+```bash
+# 1. Create config and secrets
+kubectl apply -f k8s/config-secret.yaml
+
+# 2. Deploy stateful backends (MySQL, Redis, Kafka, Elasticsearch)
+kubectl apply -f k8s/backends.yaml
+
+# 3. Deploy the LogPulse application
+kubectl apply -f k8s/app.yaml
+
+# 4. Enable Horizontal Pod Autoscaler
+kubectl apply -f k8s/hpa.yaml
+```
+
+Verify everything is running:
+
+```bash
+kubectl get pods
+kubectl get svc
+kubectl get hpa
+```
+
+Access the API (port-forward for local testing):
+
+```bash
+kubectl port-forward svc/logpulse 8080:80
+# API now available at http://localhost:8080
+```
+
+### Horizontal Pod Autoscaler
+
+The HPA automatically scales `logpulse-app` between **2 and 6 replicas** based on average CPU utilization:
+
+| Setting | Value |
+|---|---|
+| Min replicas | 2 |
+| Max replicas | 6 |
+| Scale-up trigger | Average CPU > 50% |
+
+Under load (e.g., a k6 stress test), the HPA detects CPU pressure and provisions additional pods within seconds, then scales back down when traffic subsides.
+
+```bash
+# Watch the HPA in real-time during a load test
+kubectl get hpa logpulse-hpa --watch
+```
+
+### Teardown
+
+```bash
+kubectl delete -f k8s/hpa.yaml
+kubectl delete -f k8s/app.yaml
+kubectl delete -f k8s/backends.yaml
+kubectl delete -f k8s/config-secret.yaml
+```
+
 ## API Usage Examples
 
 ### Quick Test (VS Code)
@@ -139,8 +226,9 @@ curl "http://localhost:8080/logs/search?q=timeout&level=error"
 *   **Rate Limiting**: Implemented Redis (Token Bucket / Counter) to protect the API from abuse (DDoS protection).
 *   **Clean Architecture**: Codebase structured into Controller, Service, and Repository layers with Dependency Injection, ensuring testability and maintainability.
 *   **Fully Containerized**: "One-Click Deployment" for the entire stack (App, DB, Broker, Search) using Docker Compose.
+*   **Kubernetes Ready**: Full Kubernetes manifests for production-grade deployments with ConfigMap/Secret separation and CPU-based Horizontal Pod Autoscaling (2–6 replicas).
 *   **CI/CD Pipeline**: Automated linting, testing, and image building via GitHub Actions.
-*   **DevOps Ready**: Implemented Graceful Shutdown and Health Checks for zero-downtime deployments.
+*   **DevOps Ready**: Implemented Graceful Shutdown, Health Checks (liveness/readiness probes), and resource limits for zero-downtime deployments.
 
 ## Architecture
 
@@ -294,7 +382,7 @@ brew install k6
 choco install k6
 
 # Run the stress test (ensure the app is running first)
-k6 run stress_test.js
+k6 run test/k6/stress_test.js
 ```
 
 <details>
@@ -376,7 +464,7 @@ make restart
 Run the dedicated k6 test to verify rate limiting behavior:
 
 ```bash
-k6 run test/ratelimit_test.js
+k6 run test/k6/ratelimit_test.js
 ```
 
 **Expected output:** With default config (capacity=100, rate=50/sec), approximately 12-15% of requests should be allowed, and 85-88% rate limited.
@@ -399,25 +487,35 @@ The project follows the Standard Go Project Layout:
 .
 ├── cmd/
 │   └── api/
-│       └── main.go       # Application entry point
+│       └── main.go            # Application entry point
 ├── configs/
-│   └── config.yaml       # Configuration file
+│   └── config.yaml            # Configuration file
 ├── deployments/
-│   └── docker-compose.yml # Infrastructure definition
+│   └── docker-compose.yml     # Docker Compose infrastructure definition
+├── k8s/
+│   ├── config-secret.yaml     # ConfigMap + Secret
+│   ├── backends.yaml          # MySQL, Redis, Zookeeper, Kafka, Elasticsearch
+│   ├── app.yaml               # LogPulse Deployment + ClusterIP Service
+│   └── hpa.yaml               # Horizontal Pod Autoscaler (2–6 replicas)
 ├── internal/
-│   ├── config/           # Configuration loading
-│   ├── domain/           # Domain models
-│   ├── handler/          # HTTP Handlers (Gin)
-│   ├── repository/       # Data Access (MySQL, Redis, ES, Kafka)
-│   └── service/          # Business Logic
+│   ├── config/                # Configuration loading
+│   ├── domain/                # Domain models
+│   ├── handler/               # HTTP Handlers (Gin)
+│   ├── repository/            # Data Access (MySQL, Redis, ES, Kafka)
+│   └── service/               # Business Logic
 ├── pkg/
-│   └── utils/            # Shared utilities
+│   └── utils/                 # Shared utilities
 ├── nginx/
-│   └── nginx.conf        # Nginx Load Balancer Configuration
-├── .env                  # Environment variables (if don't have one, 'make run' will auto create one)
-├── .golangci.yml         # Linting configuration
-├── Dockerfile            # Container definition
-├── Makefile              # Management commands
+│   └── nginx.conf             # Nginx Load Balancer Configuration
+├── test/
+│   └── k6/
+│       ├── stress_test.js     # k6 stress test (600 VUs, 7 min)
+│       ├── ratelimit_test.js  # k6 rate limit validation test
+│       └── testReport/        # Saved k6 test results
+├── .env                       # Environment variables (auto-created by 'make run')
+├── .golangci.yml              # Linting configuration
+├── Dockerfile                 # Container definition
+├── Makefile                   # Management commands
 └── README.md
 ```
 
