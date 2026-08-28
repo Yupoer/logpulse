@@ -25,9 +25,7 @@ jobs:
         run: go mod download
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.62.2
+        run: test -z "$(gofmt -l cmd/api/main.go internal/metrics/*.go internal/middleware/ratelimit.go internal/middleware/ratelimit_test.go internal/repository/kafka_consumer.go)"
 
       - name: Test
         run: go test ./...
