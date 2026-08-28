@@ -9,18 +9,27 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: logpulse-app
+  namespace: logpulse
   labels: { app: logpulse }
 spec:
   replicas: 2
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 120
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels: { app: logpulse }
   template:
     metadata:
       labels: { app: logpulse }
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
         - name: logpulse
-          image: logpulse:v1
+          image: logpulse:local
           imagePullPolicy: IfNotPresent   # 用本機 build 的 image,不要去 registry 拉
           ports:
             - containerPort: 8080
@@ -35,10 +44,18 @@ spec:
             httpGet: { path: /ping, port: 8080 }
             initialDelaySeconds: 5
             periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
           livenessProbe:         # 掛了就自動重啟容器
             httpGet: { path: /ping, port: 8080 }
             initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
           # ---- 資源 requests/limits (HPA 必須有 requests) ----
           resources:
             requests:
@@ -54,6 +71,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: logpulse
+  namespace: logpulse
 spec:
   type: ClusterIP
   selector: { app: logpulse }

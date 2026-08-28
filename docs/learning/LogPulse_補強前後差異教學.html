@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LogPulse｜補強前後差異教學</title>
+  <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+  <header>
+    <div class="eyebrow">ELI5 learning / junior SRE</div>
+    <h1>LogPulse 補強前後差異</h1>
+    <p class="lead">每章先用正確術語，再用生活例子降低理解門檻。生活例子有邊界，不能代替設定、request flow 或證據。</p>
+    <nav aria-label="文件導覽">
+      <a href="../index.html">入口頁</a>
+      <a href="../interview/LogPulse_20分鐘面試講稿.html">20 分鐘面試講稿</a>
+      <a href="../evidence/index.md">Evidence index</a>
+    </nav>
+  </header>
+  <main>
+    <article id="chapter-1">
+      <h2>1. App instance：HTTP API 與 Kafka consumer</h2>
+      <p class="takeaway"><strong>一句話結論：</strong>每個 app instance 同時服務 HTTP request 和 Kafka consumer，shutdown 時兩條路徑都要被等待。</p>
+      <h3>日常生活類比</h3><div class="analogy">一位店員同時接單和把單送進廚房；打烊時先停止收新單，再把手上的單交接完。</div>
+      <h3>類比限制</h3><div class="limit">店員不是 goroutine，類比沒有描述 consumer group rebalance、offset 或資料庫錯誤；這些仍要看程式與 Kafka 設定。</div>
+      <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>consumer 在背景啟動，main 沒有等待它結束，也沒有明確關閉 consumer client。</div><div><strong>修改後</strong><br>signal context 取消 consumer、consumer 關閉 client、claim flush batch，main 等待 consumer channel。</div></div>
+      <h3>真實設定與 request flow</h3><pre>SIGTERM → signal.NotifyContext cancel
+  ├─ HTTP Server.Shutdown(5s)
+  └─ Kafka Consume(ctx) → ConsumeClaim flush → client.Close()
+POST /logs → producer → Kafka → consumer → MySQL + ES</pre>
+      <h3>驗證命令</h3><pre>go test ./...
+go vet ./...
+# runtime（需要 Compose/Kubernetes）
+docker compose -f deployments/docker-compose.yml up -d --build
+# 另開 terminal 後停止 app，觀察 consumer shutdown log</pre>
+      <h3>面試回答骨架</h3><p>「我用 signal context 做共同取消來源；HTTP server 有 timeout，Kafka claim 在 session context 結束時 flush，main 透過 channel 等 consumer 完成。這證明 shutdown 路徑存在，不等於已做 production fault injection。」</p>
+      <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「收到 SIGTERM 就立刻 kill，資料一定不會丟。」</div><div><strong>正確</strong><br>「收到 SIGTERM 後停止新工作、flush 目前 batch 並等待；資料可靠度仍受 Kafka、MySQL、ES 和重試策略限制。」</div></div>
+      <h3>仍不能宣稱什麼</h3><p>不能宣稱 zero-loss、exactly-once、所有依賴都能在五秒內完成，或已通過 production fault injection。</p>
+      <h3>Evidence path</h3><p class="path">cmd/api/main.go · internal/repository/kafka_consumer.go · docs/evidence/after/implementation-status.md</p>
+    </article>
+    <article id="chapter-2">
+      <h2>2. Metrics 與 rate limiter</h2>
+      <p class="takeaway"><strong>一句話結論：</strong>用低 cardinality metrics 看 request 與 Kafka 結果，並讓 /ping、/metrics 不受 Redis rate limit 阻擋。</p>
+      <h3>日常生活類比</h3><div class="analogy">櫃台統計「哪一種服務、花多久、成功或失敗」，而不是把每位客人的姓名都當成分類；健康檢查和統計人員可直接進門。</div>
+      <h3>類比限制</h3><div class="limit">統計 counter/summary 不會自動告訴你 trace、依賴拓撲或資料內容；Redis token bucket 的一致性仍由 Redis Lua script 提供。</div>
+      <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>沒有 app metrics；所有路由都先走 rate limiter，probe/scrape 可能收到 429。</div><div><strong>修改後</strong><br>metrics middleware 記錄 route template、status、duration count/sum、Kafka result；/ping 與 /metrics 明確跳過 limiter。</div></div>
+      <h3>真實設定與 request flow</h3><pre>GET /metrics → Gin metrics middleware → skip Redis limiter → text exposition
+POST /logs → metrics middleware → Redis token bucket → handler
+labels: method, route template, status, result</pre>
+      <h3>驗證命令</h3><pre>go test ./internal/metrics ./internal/middleware
+curl http://localhost:8080/metrics
+# 確認輸出含 logpulse_http_requests_total 與 duration count/sum</pre>
+      <h3>面試回答骨架</h3><p>「我避免把 user ID、log ID 或 request ID 放進 label，只使用 route template。HTTP duration 先以 summary 的 count/sum 表達，對 lab 足夠；若需要 percentile，可再換成 histogram，但要先確認查詢需求。」</p>
+      <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「有 metrics 就代表系統可觀測性完整。」</div><div><strong>正確</strong><br>「目前有基本 counter 與 latency summary，能支援 scrape 和 dashboard；尚未包含 trace、structured logs 或完整 SLO。」</div></div>
+      <h3>仍不能宣稱什麼</h3><p>不能用本次 lab scrape 推論 production latency，也不能宣稱已完成 trace、structured logs 或完整 SLO。</p>
+      <h3>Evidence path</h3><p class="path">internal/metrics/metrics.go · internal/metrics/metrics_test.go · internal/middleware/ratelimit.go</p>
+    </article>
+    <article id="chapter-3">
+      <h2>3. Compose：移除 Nginx，保留本機邊界</h2>
+      <p class="takeaway"><strong>一句話結論：</strong>本機 Compose 讓 app 直接暴露 8080，Nginx 不再重複扮演 Kubernetes Service 的角色。</p>
+      <h3>日常生活類比</h3><div class="analogy">練習場只有一個入口，客人直接走到櫃台；正式場地才由場館網路規則決定入口和流量。</div>
+      <h3>類比限制</h3><div class="limit">移除 Nginx 不會自動提供 TLS、WAF 或 load balancing；Kubernetes Service、Ingress 或 AWS load balancer 是另一個部署決定。</div>
+      <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>Compose app 無直接 host port，Nginx 綁定 80 並代理 app。</div><div><strong>修改後</strong><br>Compose app 綁定 <code>\${APP_PORT:-8080}</code>；移除 Nginx service、config 與相關 Makefile 路徑。</div></div>
+      <h3>真實設定與 request flow</h3><pre>Browser/curl → localhost:8080 → app:8080
+Prometheus → app:8080/metrics
+app → mysql / redis / kafka / elasticsearch</pre>
+      <h3>驗證命令</h3><pre>docker compose -f deployments/docker-compose.yml config
+# Docker daemon 可用時：
+docker compose -f deployments/docker-compose.yml up -d --build
+curl http://localhost:8080/ping</pre>
+      <h3>面試回答骨架</h3><p>「Compose 的目標是 local development 和 integration dependencies，不模擬 production edge proxy。Kubernetes app Service 仍是 ClusterIP；是否加 Ingress 留到 AWS 階段依需求決定。」</p>
+      <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「沒有 Nginx 就不能做高可用。」</div><div><strong>正確</strong><br>「本機 app 直接暴露 port；高可用由多副本、Service、rolling update 和實際入口層共同決定。」</div></div>
+      <h3>仍不能宣稱什麼</h3><p>不能宣稱 local Compose 等同 AWS edge architecture、已提供 TLS，或已驗證多副本流量分配。</p>
+      <h3>Evidence path</h3><p class="path">deployments/docker-compose.yml · Makefile · nginx/nginx.conf（已移除）</p>
+    </article>
+    <article id="chapter-4">
+      <h2>4. Kubernetes：namespace、rollout 與 HPA</h2>
+      <p class="takeaway"><strong>一句話結論：</strong>app manifest 把部署安全邊界寫出來：兩副本、ClusterIP、probes、資源、rolling update、termination grace 和 HPA。</p>
+      <h3>日常生活類比</h3><div class="analogy">排班主管先讓新員工上手，再讓舊員工離場；工作量變大時增加班次，變小時慢慢減少班次。</div>
+      <h3>類比限制</h3><div class="limit">Kubernetes 不會替錯誤的 health endpoint、缺失的 Metrics Server 或不可用的 image 修正問題；emptyDir 也不是資料備份。</div>
+      <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>manifest 混用 default namespace，rollout 與 termination 設定不完整。</div><div><strong>修改後</strong><br>所有 lab 資源進 logpulse namespace；app 設定 maxUnavailable 0、maxSurge 1、30 秒 grace、probes、requests/limits、HPA 2–6。</div></div>
+      <h3>真實設定與 request flow</h3><pre>Client → Service logpulse:80 → ready app Pods:8080
+HPA → Metrics Server → Deployment replica count
+SIGTERM → preStop 5s → app graceful shutdown (30s budget)</pre>
+      <h3>驗證命令</h3><pre>kubectl apply --dry-run=client -f k8s/namespace.yaml
+kubectl apply --dry-run=client -f k8s/config-secret.yaml
+kubectl apply --dry-run=client -f k8s/app.yaml
+kubectl apply --dry-run=client -f k8s/hpa.yaml
+kubectl -n logpulse rollout status deployment/logpulse-app</pre>
+      <h3>面試回答骨架</h3><p>「我把可觀察的 app lifecycle 寫在 Deployment：readiness 控制進入 Service，liveness 偵測卡住，rolling update 保留可用副本，HPA 依 CPU 調整 2–6。backend 仍是 lab 的單副本 emptyDir。」</p>
+      <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「設定 HPA 就一定會自動擴容。」</div><div><strong>正確</strong><br>「HPA 需要 Metrics Server 和可用 resource requests；是否真的擴容要用 cluster runtime 觀察。」</div></div>
+      <h3>仍不能宣稱什麼</h3><p>不能宣稱 backend durable、已在壓力下證明 HPA 上限、或 app Service 已對外提供 load balancer；本次 rollback 已有 lab 證據。</p>
+      <h3>Evidence path</h3><p class="path">k8s/namespace.yaml · k8s/app.yaml · k8s/backends.yaml · k8s/hpa.yaml · k8s/config-secret.yaml</p>
+    </article>
+    <article id="chapter-5">
+      <h2>5. Prometheus 與 Grafana</h2>
+      <p class="takeaway"><strong>一句話結論：</strong>Prometheus scrape app 的 /metrics，Grafana 只用最小 datasource/dashboard，storage 在 lab 以 ephemeral volume 表示。</p>
+      <h3>日常生活類比</h3><div class="analogy">Prometheus 像定時抄表員，Grafana 像把抄到的數字畫成圖；抄表頻率和欄位要固定。</div>
+      <h3>類比限制</h3><div class="limit">dashboard 不會創造缺失的 metrics；ephemeral storage 重啟後可能失去歷史資料，不能拿來當長期監控平台。</div>
+      <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>沒有一致的 scrape target 與可重複的 dashboard provisioning。</div><div><strong>修改後</strong><br>Compose 與 K8s 都有 Prometheus config、Grafana datasource、dashboard，K8s volume 使用 emptyDir。</div></div>
+      <h3>真實設定與 request flow</h3><pre>Prometheus → http://logpulse:80/metrics → HTTP/Kafka series
+Grafana → http://prometheus:9090 → dashboard panels
+K8s storage: Prometheus /prometheus = emptyDir; Grafana /var/lib/grafana = emptyDir</pre>
+      <h3>驗證命令</h3><pre>docker compose -f deployments/docker-compose.yml config
+# cluster 可用時：
+kubectl -n logpulse get pods,svc prometheus grafana
+curl http://localhost:9090/-/ready</pre>
+      <h3>面試回答骨架</h3><p>「我先把 scrape target 和 dashboard provisioning 固定在版本庫，讓本機與 lab 有相同設定。因為 storage 是 ephemeral，這是驗證用 dashboard，不是保留多年資料的 observability platform。」</p>
+      <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「有 Grafana 圖表就代表告警和 SLO 都完成。」</div><div><strong>正確</strong><br>「目前有基本 request rate、Kafka result、平均 duration panel；告警規則、長期 storage 和 SLO 尚未建立。」</div></div>
+      <h3>仍不能宣稱什麼</h3><p>不能宣稱監控資料已持久化、已建立告警與 SLO，或 lab 結果代表 production observability。</p>
+      <h3>Evidence path</h3><p class="path">monitoring/prometheus.yml · monitoring/grafana/provisioning/ · k8s/monitoring.yaml</p>
+    </article>
+    <article id="chapter-6">
+      <h2>6. Terraform：AWS 施工圖與 lab runtime</h2>
+      <p class="takeaway"><strong>一句話結論：</strong>Terraform 描述最小 EKS lab 與權限邊界，本次已完成 AWS lab 的 plan、apply、runtime 驗證與 destroy。</p>
+      <h3>日常生活類比</h3><div class="analogy">建築圖畫出地基、電線和門禁；圖面完成不代表房子已蓋好，也不代表消防檢查已通過。</div>
+      <h3>類比限制</h3><div class="limit">Terraform module 仍會呼叫 AWS API、產生費用並依賴 provider/module 版本；真正的 plan/apply 需要 credentials 與權限。</div>
+      <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>沒有可重複的 AWS VPC/EKS/ECR/OIDC/budget 描述。</div><div><strong>修改後</strong><br>新增兩個 public subnets、IGW、ECR immutable、EKS managed node、add-ons、GitHub OIDC role、access entry、budget 與 outputs；設定預設 t3.large，runtime 以 t3.small x2 驗證。</div></div>
+      <h3>真實設定與 request flow</h3><pre>GitHub Actions OIDC token → IAM role → ECR push + eks:DescribeCluster
+Terraform → VPC → EKS → managed node → add-ons
+EKS access entry → kubectl namespace/logpulse deploy</pre>
+      <h3>驗證命令</h3><pre>terraform fmt -check infra/terraform/aws
+terraform -chdir=infra/terraform/aws validate
+terraform -chdir=infra/terraform/aws plan
+terraform -chdir=infra/terraform/aws apply
+terraform -chdir=infra/terraform/aws destroy</pre>
+      <h3>面試回答骨架</h3><p>「我把 lab 範圍限制在 VPC、ECR、EKS、add-ons、OIDC、access entry 和 budget，沒有把 RDS、MSK 或 NAT Gateway 偷塞進來。這次確實完成 AWS lab runtime，但驗證後已 destroy，不能把它說成長期 production 環境。」</p>
+      <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「Terraform code 在，所以 EKS 已經可用。」</div><div><strong>正確</strong><br>「Terraform code 定義了目標狀態；要等 init、validate、plan、apply 與 kubectl runtime evidence 才能說環境可用。」</div></div>
+      <h3>仍不能宣稱什麼</h3><p>不能宣稱資源成本為零、production SLA 已達成，或 OIDC role 已被 GitHub Actions workflow 實際使用；本次 ECR push 是本機 lab 證據。</p>
+      <h3>Evidence path</h3><p class="path">infra/terraform/aws/ · infra/terraform/aws/README.md · docs/evidence/after/implementation-status.md</p>
+    </article>
+    <article id="chapter-7">
+      <h2>7. GitHub Actions：OIDC 與 immutable image</h2>
+      <p class="takeaway"><strong>一句話結論：</strong>CD 只部署 CI 成功的 workflow_run.head_sha，用 OIDC 推送同一個 SHA image，再 rollout 和 cluster smoke test。</p>
+      <h3>日常生活類比</h3><div class="analogy">每箱貨都貼唯一批號，出貨單寫同一個批號；不能只寫「最新一箱」，出事才找不到來源。</div>
+      <h3>類比限制</h3><div class="limit">SHA tag 只能確認版本對應，不能保證 image 內容安全、EKS policy 正確或 smoke test 覆蓋所有功能。</div>
+      <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>CD 登入 Docker Hub，推 latest 與 github.sha，沒有 OIDC/EKS rollout。</div><div><strong>修改後</strong><br>使用 OIDC、ECR、workflow_run.head_sha、EKS_DEPLOY_ENABLED gate、rollout status 和 cluster /ping smoke test。</div></div>
+      <h3>真實設定與 request flow</h3><pre>CI success → workflow_run.head_sha
+checkout SHA → docker build → ECR:logpulse:&lt;SHA&gt;
+aws eks update-kubeconfig → kubectl set image → rollout status
+kubectl run curl pod → http://logpulse/ping</pre>
+      <h3>驗證命令</h3><pre>git diff -- .github/workflows/ci.yml .github/workflows/cd.yml
+# AWS/GitHub 設定完成後才測：
+gh workflow run "CI Pipeline"
+# 觀察 CD workflow 與 ECR image digest</pre>
+      <h3>面試回答骨架</h3><p>「我讓 CD 使用 workflow run 的 head SHA，而不是 CD 自己 checkout default branch；同一 SHA 會成為 ECR immutable tag。EKS deploy gate 預設關閉，避免 credentials 尚未就緒時誤部署。」</p>
+      <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「CI 綠燈就代表 production 已部署。」</div><div><strong>正確</strong><br>「CI 是 code gate；CD 還要通過 OIDC、ECR push、EKS rollout 與 cluster smoke test。」</div></div>
+      <h3>仍不能宣稱什麼</h3><p>不能宣稱 GitHub Actions workflow 已執行或 PR 已建立；ECR image 與 EKS rollout 有本機手動 lab 證據，但不等於 CD workflow 證據。</p>
+      <h3>Evidence path</h3><p class="path">.github/workflows/ci.yml · .github/workflows/cd.yml · infra/terraform/aws/main.tf</p>
+    </article>
+    <article id="chapter-8">
+      <h2>8. Evidence：把「寫好」和「跑過」分開</h2>
+      <p class="takeaway"><strong>一句話結論：</strong>before、after、pending 三類證據分開保存，任何未跑過的環境都標記為未 runtime verified。</p>
+      <h3>日常生活類比</h3><div class="analogy">食譜、在家試煮、餐廳出餐是三件事；食譜寫得完整，不代表餐廳已通過衛生檢查。</div>
+      <h3>類比限制</h3><div class="limit">證據索引不是測試工具，也不能補造遺失的 log；它只讓讀者知道每個 claim 應該回到哪個檔案或命令。</div>
+      <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>dirty Kubernetes/設定檔與新改動沒有隔離，README 夾帶過度的 production/benchmark 說法。</div><div><strong>修改後</strong><br>原始狀態保存在 docs/evidence/before/；after index 列出實作、已跑測試、阻塞原因與不可宣稱事項。</div></div>
+      <h3>真實設定與 request flow</h3><pre>before baseline → implementation diff → local checks
+                                      ├→ AWS lab runtime checks (cleaned)
+                                      └→ GitHub workflow/PR pending
+claim → evidence path → status (verified / not runtime verified)</pre>
+      <h3>驗證命令</h3><pre>git status --short
+git diff --check
+go test ./...
+go vet ./...
+git diff -- docs/evidence/before</pre>
+      <h3>面試回答骨架</h3><p>「我先保存 HEAD、dirty diff 和原檔，再把實作證據與 runtime 證據分層。這讓我可以準確說明哪些是程式碼檢查、哪些是本機測試、哪些是已完成的 AWS lab，哪些仍要等 GitHub 權限。」</p>
+      <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「manifest 存在，所以 EKS 驗證完成。」</div><div><strong>正確</strong><br>「manifest 已實作；沒有 cluster 的 dry-run 或 runtime output 前，狀態是未驗證。」</div></div>
+      <h3>仍不能宣稱什麼</h3><p>不能把原本 dirty 檔案算成這次成果，不能把 local lab 當 production，也不能把沒有輸出的命令寫成成功。</p>
+      <h3>Evidence path</h3><p class="path">docs/evidence/index.md · docs/evidence/before/ · docs/evidence/after/</p>
+    </article>
+  </main>
+  <footer>ELI5 是理解入口，不是技術證據；請以 source、設定與實際命令為準。</footer>
+</body>
+</html>

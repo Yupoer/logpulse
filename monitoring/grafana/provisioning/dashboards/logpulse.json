@@ -1,0 +1,32 @@
+{
+  "title": "LogPulse overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "title": "HTTP requests per second",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "sum(rate(logpulse_http_requests_total[5m]))", "legendFormat": "requests/s" }
+      ]
+    },
+    {
+      "title": "Kafka processing results",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "sum by (result) (rate(logpulse_kafka_messages_total[5m]))", "legendFormat": "{{result}}" }
+      ]
+    },
+    {
+      "title": "Average request duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "sum(rate(logpulse_http_request_duration_seconds_sum[5m])) / sum(rate(logpulse_http_request_duration_seconds_count[5m]))", "legendFormat": "seconds" }
+      ]
+    }
+  ]
+}

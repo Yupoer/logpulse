@@ -94,6 +94,12 @@ func (rl *RateLimiter) Allow(ctx context.Context, key string) (bool, error) {
 // Middleware returns a Gin middleware that applies rate limiting
 func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Health probes and Prometheus scrapes must stay available during load.
+		if c.Request.URL.Path == "/ping" || c.Request.URL.Path == "/metrics" {
+			c.Next()
+			return
+		}
+
 		// Skip if rate limiting is disabled
 		if !rl.enabled {
 			c.Next()
