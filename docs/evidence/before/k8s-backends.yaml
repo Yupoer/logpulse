@@ -13,14 +13,12 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql
-  namespace: logpulse
 spec:
   replicas: 1
   selector: { matchLabels: { app: mysql } }
   template:
     metadata: { labels: { app: mysql } }
     spec:
-      terminationGracePeriodSeconds: 30
       containers:
         - name: mysql
           image: mysql:8.0
@@ -31,17 +29,12 @@ spec:
             - { name: MYSQL_USER,          valueFrom: { secretKeyRef: { name: logpulse-secret, key: MYSQL_USER } } }
             - { name: MYSQL_PASSWORD,      valueFrom: { secretKeyRef: { name: logpulse-secret, key: MYSQL_PASSWORD } } }
           ports: [{ containerPort: 3306 }]
-          resources:
-            requests: { cpu: 100m, memory: 256Mi }
-            limits: { cpu: 500m, memory: 512Mi }
           volumeMounts: [{ name: data, mountPath: /var/lib/mysql }]
       volumes: [{ name: data, emptyDir: {} }]
 ---
 apiVersion: v1
 kind: Service
-metadata:
-  name: mysql
-  namespace: logpulse
+metadata: { name: mysql }
 spec:
   selector: { app: mysql }
   ports: [{ port: 3306, targetPort: 3306 }]
@@ -50,28 +43,21 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: redis
-  namespace: logpulse
 spec:
   replicas: 1
   selector: { matchLabels: { app: redis } }
   template:
     metadata: { labels: { app: redis } }
     spec:
-      terminationGracePeriodSeconds: 30
       containers:
         - name: redis
           image: redis:7-alpine
           args: ["redis-server", "--appendonly", "yes"]
           ports: [{ containerPort: 6379 }]
-          resources:
-            requests: { cpu: 25m, memory: 32Mi }
-            limits: { cpu: 100m, memory: 128Mi }
 ---
 apiVersion: v1
 kind: Service
-metadata:
-  name: redis
-  namespace: logpulse
+metadata: { name: redis }
 spec:
   selector: { app: redis }
   ports: [{ port: 6379, targetPort: 6379 }]
@@ -80,14 +66,12 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: zookeeper
-  namespace: logpulse
 spec:
   replicas: 1
   selector: { matchLabels: { app: zookeeper } }
   template:
     metadata: { labels: { app: zookeeper } }
     spec:
-      terminationGracePeriodSeconds: 30
       containers:
         - name: zookeeper
           image: confluentinc/cp-zookeeper:7.4.0
@@ -95,15 +79,10 @@ spec:
             - { name: ZOOKEEPER_CLIENT_PORT, value: "2181" }
             - { name: ZOOKEEPER_TICK_TIME,   value: "2000" }
           ports: [{ containerPort: 2181 }]
-          resources:
-            requests: { cpu: 100m, memory: 128Mi }
-            limits: { cpu: 250m, memory: 256Mi }
 ---
 apiVersion: v1
 kind: Service
-metadata:
-  name: zookeeper
-  namespace: logpulse
+metadata: { name: zookeeper }
 spec:
   selector: { app: zookeeper }
   ports: [{ port: 2181, targetPort: 2181 }]
@@ -112,16 +91,12 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kafka
-  namespace: logpulse
 spec:
   replicas: 1
   selector: { matchLabels: { app: kafka } }
   template:
     metadata: { labels: { app: kafka } }
     spec:
-      terminationGracePeriodSeconds: 30
-      # k8s 預設會把 Service 名稱(這裡是 "kafka")注入成 KAFKA_PORT 等舊式 env,
-      # 撞到 confluent 鏡像自己的 KAFKA_ 設定,導致 Kafka 啟動失敗。關掉它。
       enableServiceLinks: false
       containers:
         - name: kafka
@@ -135,20 +110,13 @@ spec:
             - { name: KAFKA_INTER_BROKER_LISTENER_NAME, value: "PLAINTEXT" }
             - { name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: "1" }
             - { name: KAFKA_NUM_PARTITIONS, value: "3" }
-            - { name: KAFKA_HEAP_OPTS, value: "-Xms128m -Xmx256m" }
-            - { name: KAFKA_LOG_CLEANER_ENABLE, value: "false" }
           ports:
             - { containerPort: 29092 }
             - { containerPort: 9092 }
-          resources:
-            requests: { cpu: 150m, memory: 256Mi }
-            limits: { cpu: 500m, memory: 512Mi }
 ---
 apiVersion: v1
 kind: Service
-metadata:
-  name: kafka
-  namespace: logpulse
+metadata: { name: kafka }
 spec:
   selector: { app: kafka }
   ports:
@@ -159,31 +127,24 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: elasticsearch
-  namespace: logpulse
 spec:
   replicas: 1
   selector: { matchLabels: { app: elasticsearch } }
   template:
     metadata: { labels: { app: elasticsearch } }
     spec:
-      terminationGracePeriodSeconds: 30
       containers:
         - name: elasticsearch
           image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
           env:
             - { name: discovery.type, value: "single-node" }
             - { name: xpack.security.enabled, value: "false" }
-            - { name: ES_JAVA_OPTS, value: "-Xms256m -Xmx256m" }
+            - { name: ES_JAVA_OPTS, value: "-Xms512m -Xmx512m" }
           ports: [{ containerPort: 9200 }]
-          resources:
-            requests: { cpu: 200m, memory: 512Mi }
-            limits: { cpu: 500m, memory: 768Mi }
 ---
 apiVersion: v1
 kind: Service
-metadata:
-  name: elasticsearch
-  namespace: logpulse
+metadata: { name: elasticsearch }
 spec:
   selector: { app: elasticsearch }
   ports: [{ port: 9200, targetPort: 9200 }]

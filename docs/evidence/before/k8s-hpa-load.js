@@ -1,9 +1,4 @@
-// k6 壓測腳本,專門用來觸發 HPA。
-// 大量併發打 /ping (純 CPU,不碰後端),把 app 的 CPU 拉過 50% requests。
-// 跑法: k6 run k8s/hpa-load.js
 import http from 'k6/http';
-
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 
 export const options = {
   scenarios: {
@@ -20,5 +15,5 @@ export const options = {
 };
 
 export default function () {
-  http.get(`${BASE_URL}/ping`);
+  http.get('http://localhost:8080/ping');
 }
