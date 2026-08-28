@@ -65,5 +65,5 @@ app log 同時出現 `Message sent to partition ...` 與 `[Worker] Bulk Indexed 
 
 ## Claim boundary
 
-這些是本次 AWS lab 的 runtime 證據，不是 production SLA 或零遺失保證。GitHub CLI
-authentication 已恢復，但 GitHub Actions 實際 workflow run、push/PR 仍未執行。
+這些是本次 AWS lab 的 runtime 證據，不是 production SLA 或零遺失保證。GitHub branch、PR
+與 CI run 已完成；CD 的 ECR→EKS workflow 尚未執行。

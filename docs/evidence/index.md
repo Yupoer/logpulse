@@ -23,7 +23,7 @@
 | Go、metrics、consumer shutdown、Compose、Kubernetes、monitoring | Done | 程式、manifest、local Compose 與 AWS lab runtime 均有證據。 |
 | Terraform AWS IaC | Done with lab variant | 設定預設 `t3.large` 單一 node；為符合帳號限制，實際 lab 使用 `t3.small` x 2。 |
 | GitHub Actions CI/CD 設定 | Config done | OIDC、`workflow_run.head_sha`、immutable tag、rollout、smoke、`EKS_DEPLOY_ENABLED` 已寫入。 |
-| GitHub branch push、PR、workflow run | Pending execution | `gh auth status` 已確認登入與 repository 權限；尚未安全提交或推送混有原始 dirty 檔案的 checkout，也尚未有 workflow run。 |
+| GitHub branch push、PR、workflow run | Partial | branch 已推送、PR #1 已建立、CI run `33136408359` PASS；CD 的 ECR→EKS workflow 尚未執行。 |
 | AWS deferred runtime | Done and cleaned | credentials、plan/apply、kubeconfig、dependencies/app/monitoring/HPA、runtime evidence、destroy 已完成；沒有建立 bootstrap user，因此沒有可刪除的暫時 user。 |
 | Docker BuildKit cold/warm timing | Done | `--no-cache` cold build 115.43s、warm build 3.24s，兩次 exit 0。 |
 | HTML、ELI5、面試稿、evidence index | Done | 入口與講稿已同步 AWS lab 的最新 claim boundary。 |
@@ -65,11 +65,11 @@
 | Docker Compose config/build/up | PASS | Docker Desktop、BuildKit 與 ECR image build 已驗證 |
 | Kubernetes dry-run/rollout/HPA | PASS | EKS server-side dry-run、2 Ready nodes、rollout/rollback、HPA metrics 已驗證 |
 | Prometheus/Grafana scrape | PASS | Prometheus target `up=1`、Grafana health/dashboard API 已驗證 |
-| GitHub push/PR/workflow | Not runtime verified | GitHub CLI 已恢復 authentication；尚未執行 push、PR 或 workflow run |
+| GitHub push/PR/workflow | CI PASS; CD pending | branch/PR 與 CI run 已驗證；CD 仍受 `EKS_DEPLOY_ENABLED` gate 與已清理的 AWS lab 狀態限制 |
 | Playwright browser check | PASS | CLI daemon 在受限環境 crash；改用同一 Playwright runtime + installed Chrome 完成檢查 |
 
 ## Claim boundary
 
 本階段可以說「程式與設定已實作，且 AWS lab runtime 已驗證；lab 資源已清理」。不能說
-production SLA、零遺失、正式環境已部署，或 GitHub PR/workflow 已完成。KMS key 的刪除
-仍受 AWS pending deletion 流程管理。
+production SLA、零遺失、正式環境已部署，或 GitHub CD 的 ECR→EKS rollout 已完成。GitHub
+PR 與 CI run 已有證據；KMS key 的刪除仍受 AWS pending deletion 流程管理。

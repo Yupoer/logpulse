@@ -145,7 +145,7 @@ gh workflow run "CI Pipeline"
 # 觀察 CD workflow 與 ECR image digest</pre>
       <h3>面試回答骨架</h3><p>「我讓 CD 使用 workflow run 的 head SHA，而不是 CD 自己 checkout default branch；同一 SHA 會成為 ECR immutable tag。EKS deploy gate 預設關閉，避免 credentials 尚未就緒時誤部署。」</p>
       <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「CI 綠燈就代表 production 已部署。」</div><div><strong>正確</strong><br>「CI 是 code gate；CD 還要通過 OIDC、ECR push、EKS rollout 與 cluster smoke test。」</div></div>
-      <h3>仍不能宣稱什麼</h3><p>不能宣稱 GitHub Actions workflow 已執行或 PR 已建立；ECR image 與 EKS rollout 有本機手動 lab 證據，但不等於 CD workflow 證據。</p>
+      <h3>仍不能宣稱什麼</h3><p>不能宣稱 CD 的 ECR→EKS workflow 已執行；branch、PR 與 CI run 已有證據，ECR image 與 EKS rollout 仍是本機手動 lab 證據，不等於 CD workflow 證據。</p>
       <h3>Evidence path</h3><p class="path">.github/workflows/ci.yml · .github/workflows/cd.yml · infra/terraform/aws/main.tf</p>
     </article>
     <article id="chapter-8">

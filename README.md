@@ -96,4 +96,5 @@ repository secrets/variables 時才會部署。
 
 AWS lab runtime、ECR image、EKS、Prometheus/Grafana、rollout/rollback、graceful
 shutdown 與 k6 證據見 [aws-runtime.md](docs/evidence/after/aws-runtime.md)。GitHub
-Actions 實際 workflow run、push/PR 仍未驗證；所有 lab 結果都不等於 production SLA。
+Actions branch、PR 與 CI run 已驗證；CD 的 ECR→EKS workflow 尚未執行。所有 lab 結果都
+不等於 production SLA。
