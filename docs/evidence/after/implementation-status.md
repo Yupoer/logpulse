@@ -41,5 +41,5 @@ scrape、rollout/rollback、graceful shutdown 與 k6 smoke；細節見
 EKS module 的 KMS key 仍依 AWS 流程處於 `PendingDeletion`，不把它寫成已立即刪除。
 
 GitHub CLI authentication 已恢復，branch 已推送並建立 PR #1；CI run
-`33136408359` 的 lint、test、vet、build 全部 PASS。CD 的 ECR→EKS workflow 尚未執行，
+`33137078466` 的 lint、test、vet、build 全部 PASS。CD 的 ECR→EKS workflow 尚未執行，
 不把它寫成已部署。

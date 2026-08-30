@@ -60,8 +60,8 @@ app log 同時出現 `Message sent to partition ...` 與 `[Worker] Bulk Indexed 
 - `aws eks list-clusters` 為空，`logpulse` ECR repository 已刪除，Project=logpulse
   的 VPC 查詢為空，Budget 查詢沒有 LogPulse 項目。
 - `aws logout --profile logpulse` 已完成，AWS CLI 快取登入憑證已清除。
-- EKS module 的 KMS key 依 AWS 的刪除流程仍是 `PendingDeletion`，記錄的刪除時間為
-  `2026-09-27 09:54:40 +08:00`；因此不能宣稱 AWS 帳號內所有資源已在同一秒消失。
+- EKS module 的 KMS key 依 AWS 的刪除流程仍是 `PendingDeletion`；刪除由 AWS
+  非同步處理，因此不能宣稱 AWS 帳號內所有資源已在同一秒消失。
 
 ## Claim boundary
 

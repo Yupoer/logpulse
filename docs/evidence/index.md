@@ -23,7 +23,7 @@
 | Go、metrics、consumer shutdown、Compose、Kubernetes、monitoring | Done | 程式、manifest、local Compose 與 AWS lab runtime 均有證據。 |
 | Terraform AWS IaC | Done with lab variant | 設定預設 `t3.large` 單一 node；為符合帳號限制，實際 lab 使用 `t3.small` x 2。 |
 | GitHub Actions CI/CD 設定 | Config done | OIDC、`workflow_run.head_sha`、immutable tag、rollout、smoke、`EKS_DEPLOY_ENABLED` 已寫入。 |
-| GitHub branch push、PR、workflow run | Partial | branch 已推送、PR #1 已建立、CI run `33136408359` PASS；CD 的 ECR→EKS workflow 尚未執行。 |
+| GitHub branch push、PR、workflow run | Partial | branch 已推送、PR #1 已建立、CI run `33137078466` PASS；CD 的 ECR→EKS workflow 尚未執行。 |
 | AWS deferred runtime | Done and cleaned | credentials、plan/apply、kubeconfig、dependencies/app/monitoring/HPA、runtime evidence、destroy 已完成；沒有建立 bootstrap user，因此沒有可刪除的暫時 user。 |
 | Docker BuildKit cold/warm timing | Done | `--no-cache` cold build 115.43s、warm build 3.24s，兩次 exit 0。 |
 | HTML、ELI5、面試稿、evidence index | Done | 入口與講稿已同步 AWS lab 的最新 claim boundary。 |
@@ -48,7 +48,7 @@
 | `go vet ./...` | PASS | 使用 workspace `.tmp/gocache` |
 | `go test ./internal/metrics ./internal/middleware` | PASS | metrics 與 probe bypass focused tests |
 | `gofmt` | PASS | Go source formatted |
-| `git diff --check` | PASS | 無 whitespace error |
+| `git diff --check` | PASS (current implementation) | current implementation diff 無 whitespace error；`docs/evidence/before/` 保留原始 baseline whitespace，不改寫歷史證據 |
 | Kubernetes YAML parse | PASS | Node `yaml` parser讀取 6 manifests、22 documents |
 | Grafana dashboard JSON parse | PASS | Node JSON parser |
 | `k6 inspect test/k6/eks_benchmark.js` | PASS | scenario/threshold syntax |

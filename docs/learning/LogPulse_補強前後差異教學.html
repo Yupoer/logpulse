@@ -71,14 +71,14 @@ curl http://localhost:8080/ping</pre>
       <h3>面試回答骨架</h3><p>「Compose 的目標是 local development 和 integration dependencies，不模擬 production edge proxy。Kubernetes app Service 仍是 ClusterIP；是否加 Ingress 留到 AWS 階段依需求決定。」</p>
       <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「沒有 Nginx 就不能做高可用。」</div><div><strong>正確</strong><br>「本機 app 直接暴露 port；高可用由多副本、Service、rolling update 和實際入口層共同決定。」</div></div>
       <h3>仍不能宣稱什麼</h3><p>不能宣稱 local Compose 等同 AWS edge architecture、已提供 TLS，或已驗證多副本流量分配。</p>
-      <h3>Evidence path</h3><p class="path">deployments/docker-compose.yml · Makefile · nginx/nginx.conf（已移除）</p>
+      <h3>Evidence path</h3><p class="path">deployments/docker-compose.yml · Makefile · docs/evidence/before/nginx.conf（原始 baseline）</p>
     </article>
     <article id="chapter-4">
       <h2>4. Kubernetes：namespace、rollout 與 HPA</h2>
       <p class="takeaway"><strong>一句話結論：</strong>app manifest 把部署安全邊界寫出來：兩副本、ClusterIP、probes、資源、rolling update、termination grace 和 HPA。</p>
       <h3>日常生活類比</h3><div class="analogy">排班主管先讓新員工上手，再讓舊員工離場；工作量變大時增加班次，變小時慢慢減少班次。</div>
       <h3>類比限制</h3><div class="limit">Kubernetes 不會替錯誤的 health endpoint、缺失的 Metrics Server 或不可用的 image 修正問題；emptyDir 也不是資料備份。</div>
-      <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>manifest 混用 default namespace，rollout 與 termination 設定不完整。</div><div><strong>修改後</strong><br>所有 lab 資源進 logpulse namespace；app 設定 maxUnavailable 0、maxSurge 1、30 秒 grace、probes、requests/limits、HPA 2–6。</div></div>
+      <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>manifest 混用 default namespace，rollout 與 termination 設定不完整。</div><div><strong>修改後</strong><br>所有 lab 資源進 logpulse namespace；app 設定 maxUnavailable 0、maxSurge 1、30 秒 grace、probes、requests/limits，HPA 設定範圍為 2–6。</div></div>
       <h3>真實設定與 request flow</h3><pre>Client → Service logpulse:80 → ready app Pods:8080
 HPA → Metrics Server → Deployment replica count
 SIGTERM → preStop 5s → app graceful shutdown (30s budget)</pre>
@@ -87,7 +87,7 @@ kubectl apply --dry-run=client -f k8s/config-secret.yaml
 kubectl apply --dry-run=client -f k8s/app.yaml
 kubectl apply --dry-run=client -f k8s/hpa.yaml
 kubectl -n logpulse rollout status deployment/logpulse-app</pre>
-      <h3>面試回答骨架</h3><p>「我把可觀察的 app lifecycle 寫在 Deployment：readiness 控制進入 Service，liveness 偵測卡住，rolling update 保留可用副本，HPA 依 CPU 調整 2–6。backend 仍是 lab 的單副本 emptyDir。」</p>
+      <h3>面試回答骨架</h3><p>「我把可觀察的 app lifecycle 寫在 Deployment：readiness 控制進入 Service，liveness 偵測卡住，rolling update 保留可用副本，HPA 設定依 CPU 在 2–6 間調整；本次 runtime evidence 只宣稱 metrics 正常與當下 2 replicas。backend 仍是 lab 的單副本 emptyDir。」</p>
       <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「設定 HPA 就一定會自動擴容。」</div><div><strong>正確</strong><br>「HPA 需要 Metrics Server 和可用 resource requests；是否真的擴容要用 cluster runtime 觀察。」</div></div>
       <h3>仍不能宣稱什麼</h3><p>不能宣稱 backend durable、已在壓力下證明 HPA 上限、或 app Service 已對外提供 load balancer；本次 rollback 已有 lab 證據。</p>
       <h3>Evidence path</h3><p class="path">k8s/namespace.yaml · k8s/app.yaml · k8s/backends.yaml · k8s/hpa.yaml · k8s/config-secret.yaml</p>

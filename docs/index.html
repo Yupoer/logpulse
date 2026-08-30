@@ -44,7 +44,7 @@ go vet ./...
 docker compose -f deployments/docker-compose.yml config
 k6 run test/k6/eks_benchmark.js
 npx --yes http-server docs -p 8000</pre>
-      <p>Docker Desktop、Terraform/AWS credentials 與 EKS lab 曾完成實際驗證；AWS 資源已清理。GitHub Actions workflow 與 PR 仍等待 GitHub authentication，不把設定檔當成已執行證據。</p>
+      <p>Docker Desktop、Terraform/AWS credentials 與 EKS lab 曾完成實際驗證；AWS 資源已清理。PR #1 與 CI run <code>33137078466</code> 已驗證；CD 的 ECR→EKS workflow 尚未執行，不把設定檔當成已執行證據。</p>
     </section>
   </main>
   <footer>LogPulse lab · local evidence first · production claims require runtime evidence</footer>
