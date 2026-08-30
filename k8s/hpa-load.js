@@ -1,5 +1,5 @@
 // k6 壓測腳本,專門用來觸發 HPA。
-// 大量併發打 /ping (純 CPU,不碰後端),把 app 的 CPU 拉過 50% requests。
+// 大量併發打 /ping (純 CPU,不碰後端),觀察 HPA 是否超過設定的 CPU target。
 // 跑法: k6 run k8s/hpa-load.js
 import http from 'k6/http';
 

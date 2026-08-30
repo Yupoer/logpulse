@@ -1,8 +1,7 @@
 # =========================================================
 # HPA (Horizontal Pod Autoscaler)
-# 讀 metrics-server 提供的 CPU,平均使用率 > 50% (相對於 requests 的 100m)
-# 就增加 logpulse-app 的副本數,最少 2、最多 6。
-# 用 k6 壓測 /ping 時,可以看到 Pod 從 2 自動長到 6。
+# 讀 metrics-server 提供的 CPU，依下方設定的 target 調整副本數。
+# 設定允許 logpulse-app 在 2 到 6 個副本間調整；此檔案本身不代表已達到上限。
 # =========================================================
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
