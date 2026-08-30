@@ -156,7 +156,7 @@ gh workflow run "CI Pipeline"
       <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>dirty Kubernetes/設定檔與新改動沒有隔離，README 夾帶過度的 production/benchmark 說法。</div><div><strong>修改後</strong><br>原始狀態保存在 docs/evidence/before/；after index 列出實作、已跑測試、阻塞原因與不可宣稱事項。</div></div>
       <h3>真實設定與 request flow</h3><pre>before baseline → implementation diff → local checks
                                       ├→ AWS lab runtime checks (cleaned)
-                                      └→ GitHub CD workflow pending
+                                      └→ GitHub CD workflow skipped / not runtime verified
 claim → evidence path → status (verified / not runtime verified)</pre>
       <h3>驗證命令</h3><pre>git status --short
 git diff --check

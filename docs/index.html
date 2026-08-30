@@ -15,7 +15,7 @@
       <a href="learning/LogPulse_補強前後差異教學.html">ELI5 差異教學</a>
       <a href="interview/LogPulse_20分鐘面試講稿.html">20 分鐘面試講稿</a>
       <a href="evidence/index.md">Evidence index</a>
-      <a href="../README.md">README</a>
+      <a href="https://github.com/Yupoer/logpulse/blob/master/README.md">README</a>
     </nav>
   </header>
 
@@ -44,7 +44,7 @@ go vet ./...
 docker compose -f deployments/docker-compose.yml config
 k6 run test/k6/eks_benchmark.js
 npx --yes http-server docs -p 8000</pre>
-      <p>Docker Desktop、Terraform/AWS credentials 與 EKS lab 曾完成實際驗證；AWS 資源已清理。PR #1 與 CI run <code>33137078466</code> 已驗證；CD 的 ECR→EKS workflow 尚未執行，不把設定檔當成已執行證據。</p>
+      <p>Docker Desktop、Terraform/AWS credentials 與 EKS lab 曾完成實際驗證；AWS 資源已清理。PR #1 已合併，master CI run <code>33297971228</code> 已 PASS；CD workflow skipped，尚未 runtime verified，不把設定檔當成已執行證據。</p>
     </section>
   </main>
   <footer>LogPulse lab · local evidence first · production claims require runtime evidence</footer>
