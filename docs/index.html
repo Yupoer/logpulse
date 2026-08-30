@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LogPulse lab notes</title>
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <header>
+    <div class="eyebrow">LogPulse / first stage</div>
+    <h1>從本機可驗證開始。</h1>
+    <p class="lead">這個入口把程式、部署設定、學習筆記與證據放在同一個地方。AWS lab runtime 已完成驗證並清理；production 與 GitHub workflow 的 claim 仍分開標示。</p>
+    <nav aria-label="文件導覽">
+      <a href="learning/LogPulse_補強前後差異教學.html">ELI5 差異教學</a>
+      <a href="interview/LogPulse_20分鐘面試講稿.html">20 分鐘面試講稿</a>
+      <a href="evidence/index.md">Evidence index</a>
+      <a href="../README.md">README</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="grid" aria-label="目前狀態">
+      <div class="card"><span class="tag ready">Implemented</span><h2>Go API + consumer</h2><p>同一個 app instance 啟動 HTTP server 與 Kafka consumer。收到 SIGTERM 後停止接收、關閉 consumer、flush batch，再退出。</p></div>
+      <div class="card"><span class="tag ready">Implemented</span><h2>Metrics</h2><p><code>/metrics</code> 提供 HTTP count/status/summary latency 與 Kafka processing result；只使用低 cardinality labels。</p></div>
+      <div class="card"><span class="tag ready">Implemented</span><h2>Local lab</h2><p>Compose 已移除 Nginx，保留 app、資料服務與 Prometheus/Grafana；Kubernetes manifests 有 namespace、probes、HPA 與 rolling update。</p></div>
+      <div class="card"><span class="tag ready">Lab verified</span><h2>AWS stage</h2><p>Terraform、EKS、ECR、OIDC、add-ons、monitoring、rollout、shutdown 與 k6 已完成 AWS lab 驗證；驗證後已 destroy，KMS 依 AWS 流程待刪除。</p></div>
+    </section>
+
+    <section class="card" style="margin-top:18px">
+      <h2>Request flow</h2>
+      <pre>Client ── POST /logs ──&gt; LogPulse API ──&gt; Kafka
+  │                         │              │
+  ├─ GET /logs/:id          └─ Redis       ├─ consumer batch
+  ├─ GET /logs/search ────────────────&gt; ES  └─ MySQL + ES
+  └─ GET /metrics ───────────────&gt; Prometheus ─&gt; Grafana</pre>
+      <p>API 與 consumer 是同一個 process 的兩條 goroutine 路徑；Kubernetes 只對 app 做水平擴展，Kafka consumer group 會分配 partitions。</p>
+    </section>
+
+    <section class="card" style="margin-top:18px">
+      <h2>本機檢查入口</h2>
+      <pre>go test ./...
+go vet ./...
+docker compose -f deployments/docker-compose.yml config
+k6 run test/k6/eks_benchmark.js
+npx --yes http-server docs -p 8000</pre>
+      <p>Docker Desktop、Terraform/AWS credentials 與 EKS lab 曾完成實際驗證；AWS 資源已清理。PR #1 與 CI run <code>33137078466</code> 已驗證；CD 的 ECR→EKS workflow 尚未執行，不把設定檔當成已執行證據。</p>
+    </section>
+  </main>
+  <footer>LogPulse lab · local evidence first · production claims require runtime evidence</footer>
+</body>
+</html>

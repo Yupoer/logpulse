@@ -10,3 +10,15 @@ DEV_LOG.md
 SyntaxDebt.md
 api.http
 bin
+.tmp
+docs
+infra
+k8s
+monitoring
+deployments
+output
+test
+.github
+.claude
+.env
+.env.*
