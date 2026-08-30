@@ -40,6 +40,5 @@ scrape、rollout/rollback、graceful shutdown 與 k6 smoke；細節見
 驗證後已執行 `terraform destroy`，Terraform state、EKS、ECR、VPC 與 Budget 均清空；
 EKS module 的 KMS key 仍依 AWS 流程處於 `PendingDeletion`，不把它寫成已立即刪除。
 
-GitHub CLI authentication 已恢復，branch 已推送並建立 PR #1；CI run
-`33137078466` 的 lint、test、vet、build 全部 PASS。CD 的 ECR→EKS workflow 尚未執行，
-不把它寫成已部署。
+branch 已推送；PR #1 已合併。master CI run `33297971228` 的 lint、test、vet、build
+全部 PASS。CD workflow skipped，尚未 runtime verified，不把它寫成已部署。
