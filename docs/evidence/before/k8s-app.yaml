@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logpulse-app
+  labels: { app: logpulse }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: logpulse }
+  template:
+    metadata:
+      labels: { app: logpulse }
+    spec:
+      containers:
+        - name: logpulse
+          image: logpulse:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          
+          envFrom:
+            - configMapRef: { name: logpulse-config }
+          env:
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: logpulse-secret, key: DB_PASSWORD } }
+          #health check
+          readinessProbe:        
+            httpGet: { path: /ping, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:         
+            httpGet: { path: /ping, port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          # resources cpulimit
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logpulse
+spec:
+  type: ClusterIP
+  selector: { app: logpulse }
+  ports:
+    - port: 80
+      targetPort: 8080

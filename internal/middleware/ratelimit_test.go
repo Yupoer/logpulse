@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"context"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/Yupoer/logpulse/internal/config"
 	"github.com/alicebob/miniredis/v2"
+	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
@@ -73,4 +75,28 @@ func TestRateLimiter_Disabled(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, allowed)
 	}
+}
+
+func TestRateLimiter_SkipsProbes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mr, err := miniredis.Run()
+	assert.NoError(t, err)
+	defer mr.Close()
+
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer client.Close()
+	rl := NewRateLimiter(client, config.RateLimitConfig{Enabled: true, Capacity: 0, Rate: 0})
+
+	r := gin.New()
+	r.Use(rl.Middleware())
+	r.GET("/ping", func(c *gin.Context) { c.Status(200) })
+	r.GET("/logs", func(c *gin.Context) { c.Status(200) })
+
+	probe := httptest.NewRecorder()
+	r.ServeHTTP(probe, httptest.NewRequest("GET", "/ping", nil))
+	assert.Equal(t, 200, probe.Code)
+
+	regular := httptest.NewRecorder()
+	r.ServeHTTP(regular, httptest.NewRequest("GET", "/logs", nil))
+	assert.Equal(t, 429, regular.Code)
 }

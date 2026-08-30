@@ -27,3 +27,11 @@ Thumbs.db
 DEV_LOG.md
 SyntaxDebt.md
 k8s/RUNBOOK.md
+
+# --- Local verification / Terraform state ---
+.tmp/
+infra/terraform/aws/.terraform/
+infra/terraform/aws/*.tfstate
+infra/terraform/aws/*.tfstate.*
+infra/terraform/aws/*.tfvars
+!infra/terraform/aws/terraform.tfvars.example
