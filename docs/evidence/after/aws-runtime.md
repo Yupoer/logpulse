@@ -1,6 +1,6 @@
 # AWS runtime evidence
 
-日期：2026-08-28（Asia/Taipei）
+日期：2026-08-28（AWS lab）；2026-08-31（GitHub Actions CD runtime，Asia/Taipei）
 
 ## Infrastructure
 
@@ -54,16 +54,37 @@ app log 同時出現 `Message sent to partition ...` 與 `[Worker] Bulk Indexed 
   `Shutting down server...`、`Server exiting`，另一副本持續服務。
 - k6 smoke：20 iterations、HTTP failure `0%`、p95 `151.68ms`，thresholds PASS。
 
+## GitHub Actions CD runtime
+
+同一個 master 交付鏈的 runtime 證據：
+
+- CI run [`33356543223`](https://github.com/Yupoer/logpulse/actions/runs/33356543223)：quality/build PASS。
+- CD run [`33356650844`](https://github.com/Yupoer/logpulse/actions/runs/33356650844)：deploy job PASS；測試 commit/image tag 為
+  `2f84e5ae74278ba86e39b1b27c9386037de5420d`。
+- Configure AWS credentials 使用 GitHub OIDC，caller check 輸出
+  `AWS OIDC assume-role: PASS`。
+- ECR push 完成；該 tag digest 為
+  `sha256:ca07ecec66d584ab8bb8e0ac1561dc44742d55eae24a85207855cd2b04295aca`。
+- EKS `logpulse-app` rollout 輸出 `deployment "logpulse-app" successfully rolled out`；
+  deployment `READY=2 UPDATED=2 AVAILABLE=2`。
+- cluster smoke test 以 curl pod 呼叫 `/ping`，回應 `{"message":"pong"}`；該 smoke pod
+  隨後刪除。
+- runtime 收尾的 app pods 為 `2/2 Running/Ready`、restart `0`；MySQL、Redis、
+  Zookeeper、Kafka、Elasticsearch backend pods 亦為 Running/Ready、restart `0`。
+- 驗證完成後將 repository variable `EKS_DEPLOY_ENABLED` 設為 `false`。
+
 ## Cleanup
 
-- `terraform destroy -auto-approve` 完成；`terraform state list` 為空。
-- `aws eks list-clusters` 為空，`logpulse` ECR repository 已刪除，Project=logpulse
-  的 VPC 查詢為空，Budget 查詢沒有 LogPulse 項目。
+- `terraform destroy -auto-approve` 完成，輸出 `Destroy complete! Resources: 61 destroyed.`；
+  `terraform state list` 為空。
+- `aws eks list-clusters`、`logpulse` ECR repository、Project=logpulse 的 VPC、Budget、
+  `logpulse-github-deploy` role 與 GitHub Actions OIDC provider 查詢均為空。
 - `aws logout --profile logpulse` 已完成，AWS CLI 快取登入憑證已清除。
-- EKS module 的 KMS key 依 AWS 的刪除流程仍是 `PendingDeletion`；刪除由 AWS
-  非同步處理，因此不能宣稱 AWS 帳號內所有資源已在同一秒消失。
+- EKS module 的 KMS key 依 AWS 的刪除流程仍是 `PendingDeletion`，AWS 回報刪除日期
+  `2026-09-07`；刪除由 AWS 非同步處理，因此不能宣稱 AWS 帳號內所有資源已在同一秒消失。
 
 ## Claim boundary
 
-這些是本次 AWS lab 的 runtime 證據，不是 production SLA 或零遺失保證。GitHub branch、PR
-與 CI run 已完成；CD 的 ECR→EKS workflow 尚未執行。
+這些是本次 AWS lab 與 GitHub Actions CD 的 runtime 證據，不是 production SLA 或零遺失
+保證，也不是 production deployment。CD run `33356650844` 已完成 OIDC、ECR、EKS rollout
+與 `/ping` smoke；lab 資源已清理，KMS 仍依 AWS pending deletion 流程處理。

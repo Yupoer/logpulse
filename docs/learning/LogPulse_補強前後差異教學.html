@@ -126,7 +126,7 @@ terraform -chdir=infra/terraform/aws apply
 terraform -chdir=infra/terraform/aws destroy</pre>
       <h3>面試回答骨架</h3><p>「我把 lab 範圍限制在 VPC、ECR、EKS、add-ons、OIDC、access entry 和 budget，沒有把 RDS、MSK 或 NAT Gateway 偷塞進來。這次確實完成 AWS lab runtime，但驗證後已 destroy，不能把它說成長期 production 環境。」</p>
       <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「Terraform code 在，所以 EKS 已經可用。」</div><div><strong>正確</strong><br>「Terraform code 定義了目標狀態；要等 init、validate、plan、apply 與 kubectl runtime evidence 才能說環境可用。」</div></div>
-      <h3>仍不能宣稱什麼</h3><p>不能宣稱資源成本為零、production SLA 已達成，或 OIDC role 已被 GitHub Actions workflow 實際使用；本次 ECR push 是本機 lab 證據。</p>
+      <h3>仍不能宣稱什麼</h3><p>不能宣稱資源成本為零或 production SLA 已達成；本次 GitHub Actions OIDC、ECR push 與 EKS rollout 是已清理的 lab runtime 證據。</p>
       <h3>Evidence path</h3><p class="path">infra/terraform/aws/ · infra/terraform/aws/README.md · docs/evidence/after/implementation-status.md</p>
     </article>
     <article id="chapter-7">
@@ -143,9 +143,9 @@ kubectl run curl pod → http://logpulse/ping</pre>
 # AWS/GitHub 設定完成後才測：
 gh workflow run "CI Pipeline"
 # 觀察 CD workflow 與 ECR image digest</pre>
-      <h3>面試回答骨架</h3><p>「我讓 CD 使用 workflow run 的 head SHA，而不是 CD 自己 checkout default branch；同一 SHA 會成為 ECR immutable tag。EKS deploy gate 預設關閉，避免 credentials 尚未就緒時誤部署。」</p>
+      <h3>面試回答骨架</h3><p>「我讓 CD 使用 workflow run 的 head SHA，而不是 CD 自己 checkout default branch；同一 SHA 會成為 ECR immutable tag。這次在 lab 開啟 gate 後完成 OIDC、ECR、EKS rollout 和 <code>/ping</code> smoke，驗證後再關閉 gate。」</p>
       <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「CI 綠燈就代表 production 已部署。」</div><div><strong>正確</strong><br>「CI 是 code gate；CD 還要通過 OIDC、ECR push、EKS rollout 與 cluster smoke test。」</div></div>
-      <h3>仍不能宣稱什麼</h3><p>不能宣稱 CD 的 ECR→EKS workflow 已執行；branch、PR 與 CI run 已有證據，ECR image 與 EKS rollout 仍是本機手動 lab 證據，不等於 CD workflow 證據。</p>
+      <h3>仍不能宣稱什麼</h3><p>不能宣稱 production deployment、SLA 或 zero downtime；CD 的 ECR→EKS runtime 已在本次 AWS lab run 驗證，但 lab 資源已清理。</p>
       <h3>Evidence path</h3><p class="path">.github/workflows/ci.yml · .github/workflows/cd.yml · infra/terraform/aws/main.tf</p>
     </article>
     <article id="chapter-8">
@@ -156,14 +156,14 @@ gh workflow run "CI Pipeline"
       <h3>修改前／修改後</h3><div class="compare"><div><strong>修改前</strong><br>dirty Kubernetes/設定檔與新改動沒有隔離，README 夾帶過度的 production/benchmark 說法。</div><div><strong>修改後</strong><br>原始狀態保存在 docs/evidence/before/；after index 列出實作、已跑測試、阻塞原因與不可宣稱事項。</div></div>
       <h3>真實設定與 request flow</h3><pre>before baseline → implementation diff → local checks
                                       ├→ AWS lab runtime checks (cleaned)
-                                      └→ GitHub CD workflow skipped / not runtime verified
-claim → evidence path → status (verified / not runtime verified)</pre>
+                                       └→ GitHub CD workflow runtime PASS (lab, cleaned)
+claim → evidence path → status (verified / awaiting runtime output)</pre>
       <h3>驗證命令</h3><pre>git status --short
 git diff --check
 go test ./...
 go vet ./...
 git diff -- docs/evidence/before</pre>
-      <h3>面試回答骨架</h3><p>「我先保存 HEAD、dirty diff 和原檔，再把實作證據與 runtime 證據分層。這讓我可以準確說明哪些是程式碼檢查、哪些是本機測試、哪些是已完成的 AWS lab，哪些仍要等 GitHub 權限。」</p>
+      <h3>面試回答骨架</h3><p>「我先保存 HEAD、dirty diff 和原檔，再把實作證據與 runtime 證據分層。這讓我可以準確說明哪些是程式碼檢查、哪些是本機測試、哪些是已完成的 AWS/GitHub lab，哪些仍未驗證。」</p>
       <h3>錯誤說法／正確說法</h3><div class="compare"><div><strong>錯誤</strong><br>「manifest 存在，所以 EKS 驗證完成。」</div><div><strong>正確</strong><br>「manifest 已實作；沒有 cluster 的 dry-run 或 runtime output 前，狀態是未驗證。」</div></div>
       <h3>仍不能宣稱什麼</h3><p>不能把原本 dirty 檔案算成這次成果，不能把 local lab 當 production，也不能把沒有輸出的命令寫成成功。</p>
       <h3>Evidence path</h3><p class="path">docs/evidence/index.md · docs/evidence/before/ · docs/evidence/after/</p>
