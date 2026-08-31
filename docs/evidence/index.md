@@ -90,7 +90,7 @@ SLA、零遺失或正式環境已部署。KMS key 的刪除仍受 AWS pending de
 | Graceful shutdown | `LAB_ONLY` | `docs/evidence/after/aws-runtime.md`；`docs/evidence/after/implementation-status.md` | SIGTERM／`--previous` log 來自 lab pod；不等於 zero data loss |
 | Prometheus | `LAB_ONLY` | `docs/evidence/after/aws-runtime.md`；LogPulse `monitoring/prometheus.yml` | lab scrape `up=1`；storage 為 ephemeral |
 | Grafana | `LAB_ONLY` | `docs/evidence/after/aws-runtime.md`；LogPulse `monitoring/grafana/provisioning/` | lab health／dashboard API；非長期 observability 平台 |
-| GitHub Actions CI | `VERIFIED` | PR run `33137078466`；master run `33297971228` | GitHub-hosted `quality`／`build` PASS；只證明 CI gate |
+| GitHub Actions CI | `VERIFIED` | master run `33356543223` | GitHub-hosted `quality`／`build` PASS；只證明 CI gate |
 | GitHub Actions CD | `VERIFIED_LAB_ONLY` | `docs/evidence/after/aws-runtime.md`；run `33356650844` | OIDC、ECR immutable SHA image、EKS rollout、`/ping` smoke PASS；驗證後 gate=false，非 production |
 | BuildKit | `VERIFIED` | `docs/evidence/after/implementation-status.md`；`docs/evidence/index.md` | Docker Desktop controlled build；cold／warm 結果不代表 production throughput |
 | Kafka | `VERIFIED` | `docs/evidence/after/aws-runtime.md`；`docs/evidence/index.md` | controlled local／lab integration smoke；不宣稱 production durability |
