@@ -1,7 +1,8 @@
 # LogPulse evidence index
 
-本索引把原始 dirty 狀態、這次實作和延後的 runtime 階段分開。任何沒有實際
-命令輸出的項目，都維持 `Implemented but not runtime verified`。
+本索引把原始 dirty 狀態、這次實作和 runtime 證據分開。任何沒有實際命令輸出的項目，
+仍維持「已實作、尚無 runtime output」；本輪 GitHub Actions CD 已有同一 run
+的 runtime output。
 
 ## Baseline
 
@@ -22,8 +23,8 @@
 | Baseline、detached worktree `codex/logpulse-eks-lab` | Done with boundary | dirty Kubernetes 與 `.claude/` 已保存；隔離 clone 已 review 並合併到 `master`，原始 checkout 保留。 |
 | Go、metrics、consumer shutdown、Compose、Kubernetes、monitoring | Done | 程式、manifest、local Compose 與 AWS lab runtime 均有證據。 |
 | Terraform AWS IaC | Done with lab variant | 設定預設 `t3.large` 單一 node；為符合帳號限制，實際 lab 使用 `t3.small` x 2。 |
-| GitHub Actions CI/CD 設定 | Config done | OIDC、`workflow_run.head_sha`、immutable tag、rollout、smoke、`EKS_DEPLOY_ENABLED` 已寫入。 |
-| GitHub branch push、PR、workflow run | Done with boundary | branch 已推送、PR #1 已合併、master CI run `33297971228` PASS；CD workflow skipped，尚未 runtime verified。 |
+| GitHub Actions CI/CD 設定 | Runtime verified in lab | OIDC、`workflow_run.head_sha`、immutable tag、rollout、smoke、`EKS_DEPLOY_ENABLED` 已寫入並由 master workflow 執行。 |
+| GitHub branch push、PR、workflow run | Done with boundary | PR #1–#4 已合併；master CI run `33356543223` 與 CD run `33356650844` PASS，細節見 after evidence。 |
 | AWS deferred runtime | Done and cleaned | credentials、plan/apply、kubeconfig、dependencies/app/monitoring/HPA、runtime evidence、destroy 已完成；沒有建立 bootstrap user，因此沒有可刪除的暫時 user。 |
 | Docker BuildKit cold/warm timing | Done | `--no-cache` cold build 115.43s、warm build 3.24s，兩次 exit 0。 |
 | HTML、ELI5、面試稿、evidence index | Done | 入口與講稿已同步 AWS lab 的最新 claim boundary。 |
@@ -37,7 +38,7 @@
 | Compose 移除 Nginx，加入 local Prometheus/Grafana | `deployments/docker-compose.yml`, `monitoring/` | Implemented |
 | Kubernetes namespace、probes、resources、rollout、HPA | `k8s/` | Implemented |
 | AWS VPC/ECR/EKS/OIDC/access entry/budget IaC | `infra/terraform/aws/` | Implemented and lab runtime verified |
-| CI/CD SHA image、OIDC、rollout、smoke test | `.github/workflows/` | CI verified; CD skipped / not runtime verified |
+| CI/CD SHA image、OIDC、rollout、smoke test | `.github/workflows/` | CI and CD runtime verified in lab |
 | ELI5、面試講稿、入口頁 | `docs/*.html`, `docs/learning/`, `docs/interview/` | Implemented |
 
 ## Local checks
@@ -65,16 +66,16 @@
 | Docker Compose config/build/up | PASS | Docker Desktop、BuildKit 與 ECR image build 已驗證 |
 | Kubernetes dry-run/rollout/HPA | PASS | EKS server-side dry-run、2 Ready nodes、rollout/rollback、HPA metrics 已驗證 |
 | Prometheus/Grafana scrape | PASS | Prometheus target `up=1`、Grafana health/dashboard API 已驗證 |
-| GitHub push/PR/workflow | CI PASS; CD skipped / not runtime verified | PR #1 與 master CI run 已驗證並合併；CD workflow 受 `EKS_DEPLOY_ENABLED` gate 跳過，沒有 runtime evidence |
+| GitHub push/PR/workflow | CI and CD PASS (lab) | PR #1–#4 已合併；master CI `33356543223`、CD `33356650844` 的 OIDC、ECR、rollout、smoke output 見 after evidence |
 | Playwright browser check | PASS | CLI daemon 在受限環境 crash；改用同一 Playwright runtime + installed Chrome 完成檢查 |
 
 ## Claim boundary
 
-本階段可以說「程式與設定已實作，且 AWS lab runtime 已驗證；lab 資源已清理」。不能說
-production SLA、零遺失、正式環境已部署，或 GitHub CD 的 ECR→EKS rollout 已完成。GitHub
-PR 與 CI run 已有證據；KMS key 的刪除仍受 AWS pending deletion 流程管理。
+本階段可以說「程式與設定已實作，AWS lab runtime 已驗證，且 GitHub Actions CD 在該 lab
+完成 OIDC、ECR、EKS rollout 與 `/ping` smoke test；lab 資源已清理」。不能說 production
+SLA、零遺失或正式環境已部署。KMS key 的刪除仍受 AWS pending deletion 流程管理。
 
-## Claim Audit（2026-08-30）
+## Claim Audit（2026-08-31）
 
 下表是 current-facing claim 的固定判定；`before/` 僅保存歷史 baseline，不作為目前成果。
 
@@ -90,7 +91,7 @@ PR 與 CI run 已有證據；KMS key 的刪除仍受 AWS pending deletion 流程
 | Prometheus | `LAB_ONLY` | `docs/evidence/after/aws-runtime.md`；LogPulse `monitoring/prometheus.yml` | lab scrape `up=1`；storage 為 ephemeral |
 | Grafana | `LAB_ONLY` | `docs/evidence/after/aws-runtime.md`；LogPulse `monitoring/grafana/provisioning/` | lab health／dashboard API；非長期 observability 平台 |
 | GitHub Actions CI | `VERIFIED` | PR run `33137078466`；master run `33297971228` | GitHub-hosted `quality`／`build` PASS；只證明 CI gate |
-| GitHub Actions CD | `IMPLEMENTED_NOT_RUNTIME_VERIFIED` | LogPulse `.github/workflows/cd.yml` | workflow skipped by `EKS_DEPLOY_ENABLED` gate；沒有 runtime verification |
+| GitHub Actions CD | `VERIFIED_LAB_ONLY` | `docs/evidence/after/aws-runtime.md`；run `33356650844` | OIDC、ECR immutable SHA image、EKS rollout、`/ping` smoke PASS；驗證後 gate=false，非 production |
 | BuildKit | `VERIFIED` | `docs/evidence/after/implementation-status.md`；`docs/evidence/index.md` | Docker Desktop controlled build；cold／warm 結果不代表 production throughput |
 | Kafka | `VERIFIED` | `docs/evidence/after/aws-runtime.md`；`docs/evidence/index.md` | controlled local／lab integration smoke；不宣稱 production durability |
 | Redis Token Bucket | `VERIFIED` | `docs/evidence/index.md`；LogPulse `internal/middleware/ratelimit.go` | local／lab shared rate-limit evidence；無 production SLA |

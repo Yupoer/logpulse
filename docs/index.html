@@ -10,7 +10,7 @@
   <header>
     <div class="eyebrow">LogPulse / first stage</div>
     <h1>從本機可驗證開始。</h1>
-    <p class="lead">這個入口把程式、部署設定、學習筆記與證據放在同一個地方。AWS lab runtime 已完成驗證並清理；production 與 GitHub workflow 的 claim 仍分開標示。</p>
+    <p class="lead">這個入口把程式、部署設定、學習筆記與證據放在同一個地方。AWS lab 與 GitHub Actions CD runtime 已完成驗證並清理；production claim 仍分開標示。</p>
     <nav aria-label="文件導覽">
       <a href="learning/LogPulse_補強前後差異教學.html">ELI5 差異教學</a>
       <a href="interview/LogPulse_20分鐘面試講稿.html">20 分鐘面試講稿</a>
@@ -44,7 +44,7 @@ go vet ./...
 docker compose -f deployments/docker-compose.yml config
 k6 run test/k6/eks_benchmark.js
 npx --yes http-server docs -p 8000</pre>
-      <p>Docker Desktop、Terraform/AWS credentials 與 EKS lab 曾完成實際驗證；AWS 資源已清理。PR #1 已合併，master CI run <code>33297971228</code> 已 PASS；CD workflow skipped，尚未 runtime verified，不把設定檔當成已執行證據。</p>
+      <p>Docker Desktop、Terraform/AWS credentials 與 EKS lab 曾完成實際驗證；AWS 資源已清理。master CI run <code>33356543223</code> 與 CD run <code>33356650844</code> 均 PASS；CD 的 OIDC、ECR、EKS rollout 與 <code>/ping</code> smoke output 見 <a href="evidence/after/aws-runtime.md">runtime evidence</a>。</p>
     </section>
   </main>
   <footer>LogPulse lab · local evidence first · production claims require runtime evidence</footer>
