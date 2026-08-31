@@ -83,8 +83,12 @@ OpenSearch、NAT Gateway、Ingress 或 service mesh。
   image tag 固定為 `workflow_run.head_sha`，推送 ECR 後更新 EKS，等待 rollout
   並在 cluster 內執行 `/ping` smoke test。
 
-因此目前 CI workflow 可以先存在；只有明確開啟 `EKS_DEPLOY_ENABLED` 並補齊
-repository secrets/variables 時才會部署。
+本次 lab runtime 驗證期間已開啟 gate 並補齊 repository variables/secret：master
+CI run `33356543223` PASS，CD run `33356650844` PASS。CD 透過 OIDC assume-role、
+以測試 commit `2f84e5ae74278ba86e39b1b27c9386037de5420d` 推送 ECR immutable image，
+完成 EKS rollout 與 cluster `/ping` smoke test；image digest 為
+`sha256:ca07ecec66d584ab8bb8e0ac1561dc44742d55eae24a85207855cd2b04295aca`。
+驗證後 gate 已關閉，之後的文件變更不會再次部署 lab。
 
 ## 文件與證據
 
@@ -95,6 +99,6 @@ repository secrets/variables 時才會部署。
 - [原始 dirty baseline](docs/evidence/before/)
 
 AWS lab runtime、ECR image、EKS、Prometheus/Grafana、rollout/rollback、graceful
-shutdown 與 k6 證據見 [aws-runtime.md](docs/evidence/after/aws-runtime.md)。GitHub
-Actions branch、PR 與 CI run 已驗證；CD 的 ECR→EKS workflow 尚未執行。所有 lab 結果都
-不等於 production SLA。
+shutdown、k6 與 GitHub Actions CD runtime 證據見
+[aws-runtime.md](docs/evidence/after/aws-runtime.md)。所有 lab 結果都不等於 production
+SLA。

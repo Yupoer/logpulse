@@ -74,18 +74,18 @@ Prometheus → /metrics → Grafana</pre>
     </article>
 
     <article>
-      <div class="chapter-head"><h2>15:00–17:30｜CI/CD 與 immutable image</h2><span class="tag pending">150 秒</span></div>
+      <div class="chapter-head"><h2>15:00–17:30｜CI/CD 與 immutable image</h2><span class="tag ready">150 秒</span></div>
       <p>「CI 執行 dependency download、lint、test、vet、build。CD 使用 `workflow_run.head_sha` checkout 已測試 commit，透過 GitHub OIDC 取得 AWS credentials，把 image 以該 SHA 作 immutable tag 推到 ECR，再更新 EKS deployment、等待 rollout status，最後在 cluster 內對 `/ping` 做 smoke test。」</p>
-      <p>「`EKS_DEPLOY_ENABLED` repository variable 預設未開啟；即使 AWS lab 曾經驗證過，沒有明確開啟 gate 和補齊 repository secrets/variables 時 workflow 仍不會部署。這避免把 Docker Hub latest 或未測試的工作樹當成發布版本。」</p>
+      <p>「`EKS_DEPLOY_ENABLED` repository variable 平時保持關閉；本次 lab 驗證時暫時開啟並補齊 variables/secret，完成 OIDC、ECR immutable SHA image、EKS rollout 與 cluster `/ping` smoke test，驗證後立即關閉 gate。這避免把 Docker Hub latest 或未測試的工作樹當成發布版本。」</p>
       <details><summary>白話區</summary><p>SHA tag 像每箱貨都有唯一編號；不能只貼『最新版』，否則出問題時無法知道是哪一箱。</p></details>
     </article>
 
     <article>
       <div class="chapter-head"><h2>17:30–20:00｜驗證、取捨與收尾</h2><span class="tag ready">150 秒</span></div>
-      <p>「目前已驗證的重點是 Go test、Go vet、metrics middleware、rate-limit probe bypass、Docker Compose、Kubernetes dry-run 與 AWS lab runtime；Prometheus/Grafana scrape、rollout/rollback、shutdown 和 k6 也有 after evidence。GitHub branch、PR 與 CI run 已完成；CD 的 ECR→EKS workflow 尚未執行。」</p>
+      <p>「目前已驗證的重點是 Go test、Go vet、metrics middleware、rate-limit probe bypass、Docker Compose、Kubernetes dry-run 與 AWS lab runtime；Prometheus/Grafana scrape、rollout/rollback、shutdown、k6，以及 GitHub Actions CD 的 OIDC、ECR、EKS rollout 和 `/ping` smoke 都有 after evidence。GitHub branch、PR、master CI run `33356543223` 與 CD run `33356650844` 已完成。」</p>
       <p>「我會把證據分成 before baseline、after implementation 與 pending runtime。這樣面試時能分清楚『程式已寫』、『本機已測』和『雲端已運行』三種不同命題。」</p>
       <details><summary>白話區</summary><p>考試有寫答案、在家試跑、正式上線三個層級；其中一層通過，不會自動替另外兩層作證。</p></details>
-      <p><strong>結尾句：</strong>「這個版本已用相同證據索引完成本機與 AWS lab runtime，並完成 branch、PR 與 CI 驗證；下一個缺口是受 gate 保護的 CD ECR→EKS workflow，production SLA 仍不在宣稱範圍。」</p>
+      <p><strong>結尾句：</strong>「這個版本已用相同證據索引完成本機、AWS lab 與 GitHub Actions CD runtime 驗證；CD run 完成後已關閉 gate 並清理資源，production SLA 仍不在宣稱範圍。」</p>
     </article>
   </main>
   <footer>正式術語優先；白話區只用於練習理解，不替代技術定義。</footer>

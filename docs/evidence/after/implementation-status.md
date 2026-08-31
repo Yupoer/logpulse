@@ -1,6 +1,6 @@
 # First-stage implementation status
 
-日期：2026-08-28（Asia/Taipei）
+日期：2026-08-28（原始 AWS lab）；2026-08-31（GitHub Actions CD runtime）
 
 ## Done
 
@@ -40,5 +40,11 @@ scrape、rollout/rollback、graceful shutdown 與 k6 smoke；細節見
 驗證後已執行 `terraform destroy`，Terraform state、EKS、ECR、VPC 與 Budget 均清空；
 EKS module 的 KMS key 仍依 AWS 流程處於 `PendingDeletion`，不把它寫成已立即刪除。
 
-branch 已推送；PR #1 已合併。master CI run `33297971228` 的 lint、test、vet、build
-全部 PASS。CD workflow skipped，尚未 runtime verified，不把它寫成已部署。
+PR #1–#4 已合併。master CI run `33356543223` 的 lint、test、vet、build 全部 PASS；
+對應 CD run `33356650844` 在 AWS lab 完成 OIDC assume-role、ECR push、EKS rollout 與
+cluster `/ping` smoke test，deployment 為 2/2 replicas available。測試 commit/image tag
+為 `2f84e5ae74278ba86e39b1b27c9386037de5420d`，ECR digest 為
+`sha256:ca07ecec66d584ab8bb8e0ac1561dc44742d55eae24a85207855cd2b04295aca`。驗證後
+`EKS_DEPLOY_ENABLED=false`，並完成 Terraform destroy；細節見
+`docs/evidence/after/aws-runtime.md`。這是 lab runtime evidence，不是 production deployment
+或 SLA。
