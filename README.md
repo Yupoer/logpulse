@@ -1,43 +1,99 @@
 # LogPulse
 
-LogPulse 是一個 Go log ingestion lab：API 將 log 放進 Kafka，consumer 再寫入
-MySQL 與 Elasticsearch；Redis 提供 rate limit 與簡單快取。每個 app instance
-同時執行 HTTP API 和 Kafka consumer，不再依賴 Nginx。
+LogPulse 是一個用 Go 開發的日誌收集與搜尋服務。
 
-## 本機啟動
+應用程式把日誌送到 LogPulse 的 HTTP API；LogPulse 先將資料寫入 Kafka，再由同一個 Go process 裡的背景 consumer 寫入 MySQL，並批次建立 Elasticsearch 索引。Redis 提供查詢快取、日誌數量統計與流量限制，Prometheus 和 Grafana 用來查看服務指標。
 
-需求：Go、Docker Desktop（Compose v2）。
+## 架構
+
+```mermaid
+flowchart LR
+    Client[應用程式 / Client] -->|HTTP| API
+
+    subgraph Process[LogPulse Go process]
+        API[HTTP API]
+        Consumer[Kafka consumer goroutine]
+    end
+
+    API -->|rate limit、cache、count| Redis[(Redis)]
+    API -->|POST /logs| Kafka[(Kafka)]
+    API -->|GET /logs/:id cache miss| MySQL[(MySQL)]
+    API -->|GET /logs/search| ES[(Elasticsearch)]
+
+    Kafka -->|consumer group| Consumer
+    Consumer -->|逐筆保存| MySQL
+    Consumer -->|每 100 筆或每 1 秒| ES
+    Kafka --- Zookeeper[Zookeeper]
+
+    Prometheus[Prometheus] -->|scrape /metrics| API
+    Grafana[Grafana] -->|query| Prometheus
+```
+
+資料處理流程：
+
+1. `POST /logs` 驗證 JSON，通過 Redis 流量限制後送入 Kafka。
+2. Kafka consumer 從 topic 讀取日誌，逐筆寫入 MySQL。
+3. consumer 將日誌累積到 100 筆，或等待 1 秒後，批次寫入 Elasticsearch。
+4. `GET /logs/:id` 先查 Redis，未命中時查 MySQL，再把結果放回 Redis。
+5. `GET /logs/search` 使用 Elasticsearch 搜尋 `message`、`service_name` 與 `level`。
+
+## 啟動與操作
+
+### Docker Compose
+
+需求：Docker Desktop 與 Docker Compose v2。
 
 ```powershell
 Copy-Item .env.example .env
-docker compose -f deployments/docker-compose.yml config
 docker compose -f deployments/docker-compose.yml up -d --build
-curl http://localhost:8080/ping
-curl http://localhost:8080/metrics
+docker compose -f deployments/docker-compose.yml ps
+```
+
+確認 API：
+
+```powershell
+curl.exe http://localhost:8080/ping
+curl.exe http://localhost:8080/metrics
+```
+
+建立一筆日誌：
+
+```powershell
+curl.exe -X POST http://localhost:8080/logs `
+  -H "Content-Type: application/json" `
+  -d '{"service_name":"payment-service","level":"ERROR","message":"database timeout","timestamp":"2026-09-02T10:00:00Z"}'
+```
+
+寫入是非同步的；收到 `201` 代表日誌已送入 Kafka，不代表 MySQL 與 Elasticsearch 已完成寫入。等待 consumer 處理後，可以搜尋：
+
+```powershell
+curl.exe "http://localhost:8080/logs/search?q=timeout"
+```
+
+停止服務：
+
+```powershell
 docker compose -f deployments/docker-compose.yml down
 ```
 
-Compose 只用於本機與 integration lab，包含 MySQL、Redis、Kafka、
-Elasticsearch、Kibana、Prometheus 和 Grafana。資料 volume 是本機用途，
-不是 AWS production storage 設計。
+Compose 啟動的服務與預設連接埠：
 
-## API
+| 服務 | 連接埠 | 用途 |
+| --- | ---: | --- |
+| LogPulse API | `8080` | HTTP API |
+| MySQL | `3306` | 日誌保存 |
+| Redis | `6379` | 快取、統計、流量限制 |
+| Kafka | `9092` | 日誌訊息佇列 |
+| Elasticsearch | `9200` | 日誌搜尋索引 |
+| Kibana | `5601` | Elasticsearch 查詢介面 |
+| Prometheus | `9090` | 指標收集與查詢 |
+| Grafana | `3000` | 指標 dashboard |
 
-| Method | Path | 用途 |
-| --- | --- | --- |
-| GET | `/ping` | process health probe |
-| GET | `/metrics` | Prometheus text metrics |
-| POST | `/logs` | 將 log 發到 Kafka |
-| GET | `/logs/:id` | 先查 Redis，再查 MySQL |
-| GET | `/logs/search?q=...` | Elasticsearch search |
+Kibana 可在 <http://localhost:5601> 開啟，Grafana 可在 <http://localhost:3000> 開啟；Compose 預設 Grafana 帳號為 `admin`、密碼為 `admin`。
 
-`/ping` 與 `/metrics` 不經 Redis rate limiter，避免 Kubernetes probe 或
-Prometheus scrape 因流量而得到 429。metrics 只使用 method、route template、
-status 和固定 processing result 等低 cardinality labels。
+### Kubernetes
 
-## Kubernetes lab
-
-先確認 cluster 與 kubectl context，再依序套用：
+`k8s/` 提供 LogPulse、MySQL、Redis、Zookeeper、Kafka、Elasticsearch、Prometheus 與 Grafana 的 Kubernetes manifests。
 
 ```powershell
 kubectl apply -f k8s/namespace.yaml
@@ -46,59 +102,86 @@ kubectl apply -f k8s/backends.yaml
 kubectl apply -f k8s/app.yaml
 kubectl apply -f k8s/hpa.yaml
 kubectl apply -f k8s/monitoring.yaml
+
 kubectl -n logpulse get pods,svc,hpa
 kubectl -n logpulse port-forward svc/logpulse 8080:80
 ```
 
-`k8s/app.yaml` 使用兩個 app replicas、ClusterIP、readiness/liveness、
-resource requests/limits、rolling update、rollback history 和 30 秒
-termination grace period。`k8s/backends.yaml` 的 stateful dependencies 是
-單副本與 `emptyDir`，只適合 lab；AWS 階段不會把它們誤稱為 managed service。
-HPA 需要 Metrics Server。AWS 版本透過 Terraform EKS add-on 設定；本 repo 已
-用 AWS lab 驗證節點、metrics API 與 HPA。
+LogPulse app deployment 預設為 2 個 replicas，使用 `/ping` 做 readiness/liveness probe，HPA 可在 2 至 6 個 replicas 之間依 CPU 調整。
 
-Rollback 範例：
+### AWS Terraform
+
+`infra/terraform/aws/` 提供 AWS 基礎設施設定，包含 VPC、public subnets、ECR、EKS、EKS add-ons、GitHub Actions OIDC deploy role 與 budget alert。
 
 ```powershell
-kubectl -n logpulse rollout undo deployment/logpulse-app
-kubectl -n logpulse rollout status deployment/logpulse-app
+Set-Location infra/terraform/aws
+Copy-Item terraform.tfvars.example terraform.tfvars
+terraform init
+terraform validate
+terraform plan
+terraform apply
 ```
 
-## AWS Terraform lab
+## API
 
-`infra/terraform/aws/` 只描述本計畫需要的 VPC、兩個 public subnets、IGW、
-ECR、EKS、managed node group、基本 EKS add-ons、GitHub OIDC deploy role、EKS
-access entry 與 budget alert。刻意不建立 RDS、MSK、ElastiCache、
-OpenSearch、NAT Gateway、Ingress 或 service mesh。
+| Method | Endpoint | 功能 |
+| --- | --- | --- |
+| `GET` | `/ping` | 回傳 `{"message":"pong"}` |
+| `GET` | `/metrics` | 回傳 Prometheus text format 指標 |
+| `POST` | `/logs` | 將日誌送入 Kafka |
+| `GET` | `/logs/:id` | 以 ID 讀取日誌，使用 Redis cache-aside |
+| `GET` | `/logs/search?q=keyword` | 以關鍵字搜尋 Elasticsearch |
 
-請先複製 `infra/terraform/aws/terraform.tfvars.example`，再依該目錄 README
-執行 `terraform init`、`validate`、`plan`、`apply`。Free Tier lab 可在未提交的
-`terraform.tfvars` 使用 `t3.small` 與 `node_count = 2`；完成驗證後執行
-`terraform destroy`。
+`POST /logs` 的 request body：
 
-## CI/CD
+```json
+{
+  "service_name": "checkout-service",
+  "level": "INFO",
+  "message": "checkout completed",
+  "timestamp": "2026-09-02T10:00:00Z"
+}
+```
 
-- CI：download dependencies、lint、test、vet、build。
-- CD：只在 `vars.EKS_DEPLOY_ENABLED == 'true'` 時執行，使用 GitHub OIDC，
-  image tag 固定為 `workflow_run.head_sha`，推送 ECR 後更新 EKS，等待 rollout
-  並在 cluster 內執行 `/ping` smoke test。
+`timestamp` 可以省略，服務會填入目前時間。`GET /logs/search` 必須提供 `q` 參數；格式錯誤會回傳 `400`，超過流量限制會回傳 `429`。
 
-本次 lab runtime 驗證期間已開啟 gate 並補齊 repository variables/secret：master
-CI run `33356543223` PASS，CD run `33356650844` PASS。CD 透過 OIDC assume-role、
-以測試 commit `2f84e5ae74278ba86e39b1b27c9386037de5420d` 推送 ECR immutable image，
-完成 EKS rollout 與 cluster `/ping` smoke test；image digest 為
-`sha256:ca07ecec66d584ab8bb8e0ac1561dc44742d55eae24a85207855cd2b04295aca`。
-驗證後 gate 已關閉，之後的文件變更不會再次部署 lab。
+## Features
 
-## 文件與證據
+- **非同步日誌收集**：HTTP API 與 Kafka 解耦，consumer 以 consumer group 讀取訊息。
+- **雙用途資料儲存**：MySQL 保存原始日誌，Elasticsearch 提供全文關鍵字搜尋。
+- **Elasticsearch 批次索引**：以 100 筆或 1 秒為批次建立索引。
+- **Redis cache-aside**：單筆日誌先讀 Redis，未命中再讀 MySQL，成功後快取 1 小時。
+- **Redis Token Bucket 流量限制**：依 client IP 限制請求，預設容量為 100，補充速率為每秒 50 個 token。
+- **服務可觀測性**：`/metrics` 提供 HTTP request、request duration 與 Kafka processing result，Compose 內含 Prometheus/Grafana dashboard。
+- **容器化與水平擴展**：提供 Docker Compose 與 Kubernetes manifests；Kubernetes app deployment 包含 rolling update、健康檢查與 HPA。
+- **優雅關閉**：收到 `SIGINT` 或 `SIGTERM` 時停止 HTTP server、停止 Kafka consumer 並等待處理中的批次完成。
 
-- [入口頁](docs/index.html)
-- [ELI5 差異教學](docs/learning/LogPulse_補強前後差異教學.html)
-- [20 分鐘面試講稿](docs/interview/LogPulse_20分鐘面試講稿.html)
-- [Evidence index](docs/evidence/index.md)
-- [原始 dirty baseline](docs/evidence/before/)
+## 測試與測試數據
 
-AWS lab runtime、ECR image、EKS、Prometheus/Grafana、rollout/rollback、graceful
-shutdown、k6 與 GitHub Actions CD runtime 證據見
-[aws-runtime.md](docs/evidence/after/aws-runtime.md)。所有 lab 結果都不等於 production
-SLA。
+執行 Go 測試與靜態檢查：
+
+```powershell
+go test ./...
+go vet ./...
+go build ./cmd/api
+```
+
+目前的自動化測試涵蓋：
+
+- 日誌建立流程與 producer/cache repository 互動。
+- Prometheus metrics 輸出與低 cardinality labels。
+- Redis Token Bucket 的允許、拒絕、停用與 probe 路徑行為。
+
+壓力測試腳本位於 `test/k6/`。既有混合寫入、讀取與搜尋測試結果如下：
+
+| 測試 | 結果 |
+| --- | --- |
+| `test/k6/stress_test.js` | 最高 600 VUs、743,453 requests、1,768.70 requests/s、p95 292.41 ms |
+| 寫入成功率 | 99.93% |
+| 讀取／搜尋成功率 | 100% |
+
+完整輸出保存在 `test/k6/testReport/StressTest.txt`。其中的少量 `429` 是流量限制在高併發下主動拒絕的結果。
+
+## License
+
+[MIT License](LICENSE)
