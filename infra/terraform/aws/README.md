@@ -26,6 +26,5 @@ terraform apply
 terraform destroy
 ```
 
-Do not commit `terraform.tfvars` or credentials. The runtime evidence for this
-lab is in `docs/evidence/after/aws-runtime.md`; it does not claim production
-SLA or managed stateful services.
+Do not commit `terraform.tfvars` or credentials. Runtime evidence for this lab
+is kept locally; it does not claim production SLA or managed stateful services.

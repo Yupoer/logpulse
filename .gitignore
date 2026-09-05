@@ -35,3 +35,10 @@ infra/terraform/aws/*.tfstate
 infra/terraform/aws/*.tfstate.*
 infra/terraform/aws/*.tfvars
 !infra/terraform/aws/terraform.tfvars.example
+
+# --- Local-only documents and generated artifacts ---
+/doc/
+/docs/
+/output/
+/assets/
+.claude/

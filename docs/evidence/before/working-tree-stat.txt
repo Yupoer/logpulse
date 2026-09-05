@@ -1,6 +1,0 @@
- k8s/app.yaml           | 21 ++++++---------------
- k8s/backends.yaml      |  2 --
- k8s/config-secret.yaml |  5 -----
- k8s/hpa-load.js        |  3 ---
- k8s/hpa.yaml           |  6 ------
- 5 files changed, 6 insertions(+), 31 deletions(-)
